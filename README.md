@@ -1,64 +1,104 @@
-# GTA6 Hub — Daily YouTube Upload Bot
+# KLIPIT
 
-Fully automated daily uploads for **@Hoodstar365**. Every morning at **8:00 AM ET**, GitHub Actions:
+Paste a stream link → KLIPIT finds the best moments, cuts them into clips (16:9 + 9:16), and the user downloads and posts them anywhere. Subscription tiers set how many links a user can run each month.
 
-1. Pulls the latest **GTA 6 news** (SerpAPI)
-2. Writes a 60–90s hype **script + title + description** (Claude)
-3. Generates a **voiceover** (ElevenLabs)
-4. Generates **4 cinematic backgrounds** (fal.ai Flux)
-5. Assembles a **Ken Burns slideshow + voiceover** into `final.mp4` (ffmpeg)
-6. **Uploads to YouTube** (Data API v3)
-
-Runs on the free GitHub Actions tier. No server needed.
+An HSW365 product · hsw365media@gmail.com
 
 ---
 
-## One-time setup (~20 min)
+## What it does (and nothing else)
 
-### 1. Create the repo
-Push this folder to **`HSW365/gta6-hub`** (private is fine).
+1. User pastes a public stream/VOD link (YouTube, Twitch VOD, Kick, etc.).
+2. KLIPIT downloads it with `yt-dlp`.
+3. It scans the audio for the loudest, most-hype moments (`ffmpeg` energy detection).
+4. Claude ranks and titles the best moments.
+5. `ffmpeg` cuts each into a clip — wide (16:9) and vertical (9:16).
+6. The user downloads them and posts wherever they want.
 
-### 2. Get 6 API keys
+**Paid APIs: Claude + Stripe only.** Everything else (`yt-dlp`, `ffmpeg`, Supabase free tier) costs nothing per clip.
 
-| Secret | Where |
-|---|---|
-| `ANTHROPIC_API_KEY` | console.anthropic.com |
-| `SERPAPI_KEY` | serpapi.com |
-| `ELEVENLABS_API_KEY` | elevenlabs.io |
-| `ELEVENLABS_VOICE_ID` | ElevenLabs → your voice → ID |
-| `FAL_KEY` | fal.ai |
-| `YT_CLIENT_ID` + `YT_CLIENT_SECRET` | Google Cloud Console → OAuth client (Desktop app), YouTube Data API v3 enabled |
+---
 
-### 3. Mint the YouTube refresh token (local, once)
-On your Windows PC:
+## Stack
+
+- **Node.js / Express** — API + serves the frontend + runs the job worker in-process
+- **yt-dlp + ffmpeg** — download, highlight detection, cutting (free, no API)
+- **Claude API** — picks + titles the final clips
+- **Supabase (Postgres)** — subscribers, jobs, clips, monthly quota
+- **Stripe** — subscriptions ($20 / $45 / $99), webhook-driven activation
+
+---
+
+## This cannot run on GitHub Pages
+
+GitHub Pages is static hosting — it can't download video, run ffmpeg, or hold state. Use `hsw365.github.io/KLIPIT/` as the **marketing page** and run this app on a real container. See **Deploy**.
+
+---
+
+## Setup
+
+### 1. Supabase
+Create a Supabase project, then run `supabase/schema.sql` in its SQL editor. Grab:
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY` (Project settings → API → service_role — **server only, never ship to the browser**)
+
+### 2. Stripe
+- Create 3 recurring **Products/Prices**: $20, $45, $99 monthly → copy the `price_...` IDs into `STRIPE_PRICE_STARTER/PRO/ELITE`.
+- Get `STRIPE_SECRET_KEY`.
+- Add a webhook endpoint → `https://YOUR-APP/api/stripe/webhook`, subscribe to `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted` → copy the signing secret into `STRIPE_WEBHOOK_SECRET`.
+
+### 3. Claude
+- `ANTHROPIC_API_KEY` from console.anthropic.com.
+
+### 4. Env
+Copy `.env.example` → `.env` and fill everything in.
+
+---
+
+## Run locally
+
 ```bash
 npm install
-set YT_CLIENT_ID=your_id
-set YT_CLIENT_SECRET=your_secret
-node scripts/get-refresh-token.js
+# ffmpeg + yt-dlp must be installed on your machine:
+#   ffmpeg: https://ffmpeg.org/download.html
+#   yt-dlp: pip install yt-dlp
+cp .env.example .env    # then fill it in
+npm start               # http://localhost:3000
 ```
-A browser opens → approve → the terminal prints `YT_REFRESH_TOKEN`.
 
-### 4. Add all secrets to GitHub
-Repo → **Settings → Secrets and variables → Actions → New repository secret**. Add all 8:
-`ANTHROPIC_API_KEY`, `SERPAPI_KEY`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `FAL_KEY`, `YT_CLIENT_ID`, `YT_CLIENT_SECRET`, `YT_REFRESH_TOKEN`.
-
-### 5. Done
-It fires daily on its own. To test now: **Actions tab → GTA6 Hub Daily Upload → Run workflow**.
+For Stripe webhooks locally: `stripe listen --forward-to localhost:3000/api/stripe/webhook`.
 
 ---
 
-## Preview locally before going live
-Builds today's video **without uploading** so you can watch `output/final.mp4`:
-```bash
-npm install
-# set the stage 01–03 env vars, then:
-bash scripts/run-local.sh
-```
+## Deploy (Render, Docker)
+
+The included `Dockerfile` installs ffmpeg + yt-dlp. `render.yaml` is a ready blueprint.
+
+1. Push this repo to GitHub.
+2. Render → New → Blueprint → point at the repo.
+3. Set every `sync: false` env var in the Render dashboard (Supabase, Stripe, Anthropic, `APP_URL`).
+4. Deploy. Use at least the **Standard** plan — video processing needs real CPU/RAM, and the attached 20 GB disk holds clips.
+
+Any host that runs Docker with ffmpeg + a persistent disk works (Fly.io, Railway, a VPS).
 
 ---
 
-## Notes
-- **DST is handled.** Two crons (12:00 & 13:00 UTC) fire, and a guard step skips whichever one isn't real 08 ET — so exactly one post per day, year-round.
-- **Model** defaults to `claude-sonnet-5`. Override with the `ANTHROPIC_MODEL` env var if needed.
-- **IP-safe.** This is a **news & commentary** channel: original narration over real headlines with original AI-generated visuals. It uses **no Rockstar footage, art, or trademarks** — image prompts are generic (neon city, palm trees, sports cars), not branded place-names. Not affiliated with or endorsed by Rockstar Games / Take-Two.
+## How tiers / quota work
+
+`lib/tiers.js` defines the plans. A "run" = one link processed. Quota is consumed atomically in Postgres (`klipit_consume_quota`) and **refunded automatically if a job fails**. The monthly window rolls 30 days after first use.
+
+| Plan | Price | Runs/mo | Max VOD | Clips/run |
+|------|-------|---------|---------|-----------|
+| Clipper | $20 | 25 | 90 min | 6 |
+| Pro | $45 | 75 | 180 min | 12 |
+| Elite | $99 | 250 | 600 min | 24 |
+
+**These run/limit numbers are a proposal — adjust in `lib/tiers.js` before launch. Prices are fixed at 20/45/99.**
+
+---
+
+## Notes / hardening
+
+- **Auth** is a per-subscriber `klip_` API key minted on checkout (shown on the success screen). Simple and real; swap in Supabase Auth magic links later if you want accounts.
+- **Better highlights (optional):** wire local Whisper (`whisper.cpp`, free) into `lib/highlights.js` to give Claude a transcript — titles get much sharper. Off by default so there's no heavy model download.
+- **Storage:** clips are written to the persistent disk and served from `/clips/...`. For multi-instance scale, move them to Supabase Storage / S3.

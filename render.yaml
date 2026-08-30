@@ -1,0 +1,36 @@
+# Render blueprint for KLIPIT. Video processing needs real CPU/RAM/disk —
+# do NOT use the free instance for the runtime; use at least a Standard plan.
+services:
+  - type: web
+    name: klipit
+    runtime: docker
+    plan: standard            # video work needs CPU + RAM; free tier will not cut it
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    disk:
+      name: klipit-data
+      mountPath: /data        # clips + working files persist here
+      sizeGB: 20
+    envVars:
+      - key: DATA_DIR
+        value: /data
+      - key: APP_URL
+        sync: false           # set to your live URL, e.g. https://klipit.onrender.com
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ANTHROPIC_MODEL
+        value: claude-sonnet-5
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_PRICE_STARTER
+        sync: false
+      - key: STRIPE_PRICE_PRO
+        sync: false
+      - key: STRIPE_PRICE_ELITE
+        sync: false

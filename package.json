@@ -1,22 +1,21 @@
 {
-  "name": "gta6-hub",
+  "name": "klipit",
   "version": "1.0.0",
   "private": true,
-  "description": "Hoodstar365 GTA6 Hub — daily auto-upload YouTube pipeline (news/commentary + AI visuals).",
-  "type": "commonjs",
+  "description": "KLIPIT — paste a stream link, get clips of the best moments, download and post anywhere.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
-    "script": "node scripts/01-generate-script.js",
-    "voiceover": "node scripts/02-generate-voiceover.js",
-    "visuals": "node scripts/03-generate-visuals.js",
-    "assemble": "bash scripts/04-assemble-video.sh",
-    "upload": "node scripts/05-upload-youtube.js",
-    "local": "bash scripts/run-local.sh",
-    "token": "node scripts/get-refresh-token.js"
+    "start": "node server.js",
+    "worker": "node jobs/worker.js",
+    "dev": "node server.js"
   },
   "dependencies": {
-    "googleapis": "^144.0.0"
-  },
-  "devDependencies": {
-    "open": "^10.1.0"
+    "@supabase/supabase-js": "^2.45.4",
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "stripe": "^16.9.0"
   }
 }
