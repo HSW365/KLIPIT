@@ -1,0 +1,22 @@
+{
+  "name": "gta6-hub",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Hoodstar365 GTA6 Hub — daily auto-upload YouTube pipeline (news/commentary + AI visuals).",
+  "type": "commonjs",
+  "scripts": {
+    "script": "node scripts/01-generate-script.js",
+    "voiceover": "node scripts/02-generate-voiceover.js",
+    "visuals": "node scripts/03-generate-visuals.js",
+    "assemble": "bash scripts/04-assemble-video.sh",
+    "upload": "node scripts/05-upload-youtube.js",
+    "local": "bash scripts/run-local.sh",
+    "token": "node scripts/get-refresh-token.js"
+  },
+  "dependencies": {
+    "googleapis": "^144.0.0"
+  },
+  "devDependencies": {
+    "open": "^10.1.0"
+  }
+}
