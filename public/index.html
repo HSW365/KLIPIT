@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>KLIPIT — GTA6 Stream Clipper by HSW365</title>
+<meta name="description" content="Paste a GTA6 stream link. Klipit finds the viral moments and cuts ready-to-post clips. By HSW365." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+<nav class="nav">
+  <div class="brand">KLIP<span>IT</span></div>
+  <div class="nav-links">
+    <a href="#how">How it works</a>
+    <a href="#pricing">Pricing</a>
+    <a href="#clip" class="btn btn-ghost">Start clipping</a>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="tag">BY HSW365</div>
+  <h1>Paste a GTA6 stream.<br /><span class="grad">Get viral clips.</span></h1>
+  <p class="sub">Drop any GTA 6 stream link — YouTube, Twitch, Kick. Klipit reads the stream, Claude finds the funniest, most clutch, most unhinged moments, and cuts them into ready-to-post vertical clips. No editing. No timeline. Just clips.</p>
+  <div class="hero-cta">
+    <a href="#pricing" class="btn btn-primary">See plans</a>
+    <a href="#clip" class="btn btn-ghost">I already subscribe</a>
+  </div>
+  <div class="hero-note">Turn one stream into a week of content.</div>
+</header>
+
+<section id="how" class="how">
+  <h2>How it works</h2>
+  <div class="steps">
+    <div class="step"><div class="num">01</div><h3>Paste the link</h3><p>Copy any GTA6 stream URL from the streamer you're watching and drop it in.</p></div>
+    <div class="step"><div class="num">02</div><h3>Claude finds the moments</h3><p>Klipit scans the stream and picks the clips most likely to pop off — fails, clutch plays, rage, chaos.</p></div>
+    <div class="step"><div class="num">03</div><h3>Download and post</h3><p>Vertical clips with hooks, cut and formatted for TikTok, Reels and Shorts. Number of clips scales with your plan.</p></div>
+  </div>
+</section>
+
+<section id="pricing" class="pricing">
+  <h2>Plans</h2>
+  <p class="pricing-sub">More clips, higher quality, longer streams as you go up.</p>
+  <div id="tiers" class="tiers"><div class="loading">Loading plans…</div></div>
+  <div class="pricing-foot">Cancel anytime. Billed monthly via Stripe.</div>
+</section>
+
+<section id="clip" class="clipper">
+  <h2>Clip a stream</h2>
+  <p class="clipper-sub">For active subscribers. Enter the email on your plan and the stream link.</p>
+  <div class="clip-card">
+    <label>Subscriber email</label>
+    <input id="email" type="email" placeholder="you@email.com" autocomplete="email" />
+    <label>GTA6 stream link</label>
+    <input id="url" type="url" placeholder="https://youtube.com/watch?v=… or twitch.tv/videos/…" />
+    <button id="go" class="btn btn-primary btn-block">Generate clips</button>
+    <div id="status" class="status"></div>
+    <div id="clips" class="clips"></div>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="brand small">KLIP<span>IT</span></div>
+  <div class="foot-meta">
+    <span>A HSW365 product</span>
+    <a href="mailto:hsw365media@gmail.com">hsw365media@gmail.com</a>
+  </div>
+  <div class="foot-legal">Not affiliated with or endorsed by Rockstar Games or Take-Two. GTA and Grand Theft Auto are trademarks of their respective owners. You are responsible for the rights to any stream you submit.</div>
+</footer>
+
+<script src="/app.js"></script>
+</body>
+</html>
