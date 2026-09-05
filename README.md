@@ -1,104 +1,56 @@
-# KLIPIT
+# KLIPIT — by HSW365
 
-Paste a stream link → KLIPIT finds the best moments, cuts them into clips (16:9 + 9:16), and the user downloads and posts them anywhere. Subscription tiers set how many links a user can run each month.
+Paste a GTA6 stream link → Klipit finds the viral moments and cuts ready-to-post vertical clips. Clip count and quality scale with the subscriber's plan.
 
-An HSW365 product · hsw365media@gmail.com
+**Stack (stripped to the essentials):** Claude API + Stripe. Nothing else. No ElevenLabs, no fal.ai, no SerpAPI.
 
----
+- **Frontend** — static landing + pricing + clipper (`/public`), served by the backend.
+- **Backend** — Node/Express (`/server`): Stripe checkout + webhook, clip job API.
+- **Engine** — `yt-dlp` reads the stream captions, **Claude** picks the best 15–45s moments, `yt-dlp` pulls only those segments, `ffmpeg` renders them vertical (9:16) with captions/watermark by tier.
+- **Data** — Supabase (subscribers, jobs, clip storage).
 
-## What it does (and nothing else)
+## How the clipping actually works
+1. `yt-dlp` grabs the stream's captions only (no full download) — fast.
+2. Claude reads the timestamped transcript and returns the top N moments (N = plan).
+3. `yt-dlp --download-sections` pulls **only those seconds**, not the whole stream.
+4. `ffmpeg` crops to vertical, burns captions/watermark per tier, exports MP4.
+5. Clips upload to Supabase storage; the subscriber downloads them.
 
-1. User pastes a public stream/VOD link (YouTube, Twitch VOD, Kick, etc.).
-2. KLIPIT downloads it with `yt-dlp`.
-3. It scans the audio for the loudest, most-hype moments (`ffmpeg` energy detection).
-4. Claude ranks and titles the best moments.
-5. `ffmpeg` cuts each into a clip — wide (16:9) and vertical (9:16).
-6. The user downloads them and posts wherever they want.
+> Because it works off captions + segment downloads, it never has to download a 6-hour VOD. Streams **without captions** are rejected with a clear message (whisper transcription can be added later as an Elite feature).
 
-**Paid APIs: Claude + Stripe only.** Everything else (`yt-dlp`, `ffmpeg`, Supabase free tier) costs nothing per clip.
-
----
-
-## Stack
-
-- **Node.js / Express** — API + serves the frontend + runs the job worker in-process
-- **yt-dlp + ffmpeg** — download, highlight detection, cutting (free, no API)
-- **Claude API** — picks + titles the final clips
-- **Supabase (Postgres)** — subscribers, jobs, clips, monthly quota
-- **Stripe** — subscriptions ($20 / $45 / $99), webhook-driven activation
-
----
-
-## This cannot run on GitHub Pages
-
-GitHub Pages is static hosting — it can't download video, run ffmpeg, or hold state. Use `hsw365.github.io/KLIPIT/` as the **marketing page** and run this app on a real container. See **Deploy**.
-
----
+## Plans (edit in `server/lib/tiers.js` — prices are placeholders, confirm before going live)
+| Plan | Price | Clips/stream | Scan window | Quality |
+|------|-------|--------------|-------------|---------|
+| Starter | $9/mo | 3 | 30 min | 720p, watermark |
+| Pro | $29/mo | 15 | 120 min | 1080p, captions |
+| Elite | $79/mo | 40 | 480 min | 1080p, captions |
 
 ## Setup
-
-### 1. Supabase
-Create a Supabase project, then run `supabase/schema.sql` in its SQL editor. Grab:
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY` (Project settings → API → service_role — **server only, never ship to the browser**)
-
-### 2. Stripe
-- Create 3 recurring **Products/Prices**: $20, $45, $99 monthly → copy the `price_...` IDs into `STRIPE_PRICE_STARTER/PRO/ELITE`.
-- Get `STRIPE_SECRET_KEY`.
-- Add a webhook endpoint → `https://YOUR-APP/api/stripe/webhook`, subscribe to `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted` → copy the signing secret into `STRIPE_WEBHOOK_SECRET`.
-
-### 3. Claude
-- `ANTHROPIC_API_KEY` from console.anthropic.com.
-
-### 4. Env
-Copy `.env.example` → `.env` and fill everything in.
-
----
-
-## Run locally
-
 ```bash
 npm install
-# ffmpeg + yt-dlp must be installed on your machine:
-#   ffmpeg: https://ffmpeg.org/download.html
-#   yt-dlp: pip install yt-dlp
-cp .env.example .env    # then fill it in
-npm start               # http://localhost:3000
+cp .env.example .env      # fill in keys
 ```
 
-For Stripe webhooks locally: `stripe listen --forward-to localhost:3000/api/stripe/webhook`.
-
----
+1. **Supabase** — run `supabase/schema.sql`, then create a **public** storage bucket named `klipit-clips`.
+2. **Stripe** — put your `STRIPE_SECRET_KEY` in `.env`, confirm prices in `tiers.js`, then:
+   ```bash
+   npm run stripe:setup      # creates products/prices, prints the STRIPE_PRICE_* lines
+   ```
+   Paste those into `.env`.
+3. **Stripe webhook** — point a webhook at `https://<your-app>/api/webhook` for events
+   `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`.
+   Put the signing secret in `STRIPE_WEBHOOK_SECRET`.
+4. **Run**
+   ```bash
+   npm start                 # http://localhost:3000
+   ```
 
 ## Deploy (Render, Docker)
+The `Dockerfile` installs ffmpeg + yt-dlp + fonts. Push to GitHub, create a Render **Web Service** from the repo (`render.yaml` is included), set the env vars, deploy. Set `APP_URL` to the Render URL.
 
-The included `Dockerfile` installs ffmpeg + yt-dlp. `render.yaml` is a ready blueprint.
+> Video processing needs real RAM/CPU — the Render **Starter** plan, not free. Free tier will time out and spin down mid-job.
 
-1. Push this repo to GitHub.
-2. Render → New → Blueprint → point at the repo.
-3. Set every `sync: false` env var in the Render dashboard (Supabase, Stripe, Anthropic, `APP_URL`).
-4. Deploy. Use at least the **Standard** plan — video processing needs real CPU/RAM, and the attached 20 GB disk holds clips.
+## Contact
+HSW365 · hsw365media@gmail.com
 
-Any host that runs Docker with ffmpeg + a persistent disk works (Fly.io, Railway, a VPS).
-
----
-
-## How tiers / quota work
-
-`lib/tiers.js` defines the plans. A "run" = one link processed. Quota is consumed atomically in Postgres (`klipit_consume_quota`) and **refunded automatically if a job fails**. The monthly window rolls 30 days after first use.
-
-| Plan | Price | Runs/mo | Max VOD | Clips/run |
-|------|-------|---------|---------|-----------|
-| Clipper | $20 | 25 | 90 min | 6 |
-| Pro | $45 | 75 | 180 min | 12 |
-| Elite | $99 | 250 | 600 min | 24 |
-
-**These run/limit numbers are a proposal — adjust in `lib/tiers.js` before launch. Prices are fixed at 20/45/99.**
-
----
-
-## Notes / hardening
-
-- **Auth** is a per-subscriber `klip_` API key minted on checkout (shown on the success screen). Simple and real; swap in Supabase Auth magic links later if you want accounts.
-- **Better highlights (optional):** wire local Whisper (`whisper.cpp`, free) into `lib/highlights.js` to give Claude a transcript — titles get much sharper. Off by default so there's no heavy model download.
-- **Storage:** clips are written to the persistent disk and served from `/clips/...`. For multi-instance scale, move them to Supabase Storage / S3.
+Not affiliated with or endorsed by Rockstar Games / Take-Two. Users are responsible for the rights to any stream they submit.
