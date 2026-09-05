@@ -31,6 +31,21 @@ app.post("/api/webhook", express.raw({ type: "application/json" }), async (req, 
 
 app.use(express.json());
 
+// Health + config visibility — shows which integrations are wired.
+app.get("/api/health", (_req, res) => {
+  res.json({
+    ok: true,
+    stripe: Boolean(process.env.STRIPE_SECRET_KEY),
+    stripePrices: {
+      starter: Boolean(process.env.STRIPE_PRICE_STARTER),
+      pro: Boolean(process.env.STRIPE_PRICE_PRO),
+      elite: Boolean(process.env.STRIPE_PRICE_ELITE),
+    },
+    claude: Boolean(process.env.ANTHROPIC_API_KEY),
+    supabase: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY),
+  });
+});
+
 // Public tier list for the pricing UI.
 app.get("/api/tiers", (_req, res) => {
   res.json(

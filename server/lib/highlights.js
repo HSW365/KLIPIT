@@ -1,6 +1,14 @@
 import Anthropic from "@anthropic-ai/sdk";
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY || "" });
+// Lazy singleton — don't throw at import when ANTHROPIC_API_KEY is unset.
+let _anthropic = null;
+function anthropic() {
+  if (_anthropic) return _anthropic;
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) throw new Error("Claude not configured: set ANTHROPIC_API_KEY");
+  _anthropic = new Anthropic({ apiKey: key });
+  return _anthropic;
+}
 
 // transcript: [{ start: seconds, end: seconds, text }]
 // Returns up to `count` highlight ranges: [{ start, end, title, caption }]
@@ -28,7 +36,7 @@ export async function pickHighlights(transcript, count, maxSeconds) {
     `caption (<=90 chars hook line, no emojis). Order by virality, best first.\n\n` +
     `TRANSCRIPT:\n${lines}`;
 
-  const resp = await anthropic.messages.create({
+  const resp = await anthropic().messages.create({
     model: "claude-sonnet-4-6",
     max_tokens: 2000,
     system: sys,

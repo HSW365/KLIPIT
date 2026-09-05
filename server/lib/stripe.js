@@ -2,11 +2,17 @@ import Stripe from "stripe";
 import { TIERS, tierFromPriceId } from "./tiers.js";
 import { upsertSubscriber } from "./supabase.js";
 
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
-  apiVersion: "2024-06-20",
-});
+// Lazy singleton — don't throw at import when STRIPE_SECRET_KEY is unset.
+let _stripe = null;
+export function stripeClient() {
+  if (_stripe) return _stripe;
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) throw new Error("Stripe not configured: set STRIPE_SECRET_KEY");
+  _stripe = new Stripe(key, { apiVersion: "2024-06-20" });
+  return _stripe;
+}
 
-const APP_URL = process.env.APP_URL || "http://localhost:3000";
+const APP_URL = () => process.env.APP_URL || "http://localhost:3000";
 
 export async function createCheckoutSession(tierKey, email) {
   const tier = TIERS[tierKey];
@@ -14,19 +20,20 @@ export async function createCheckoutSession(tierKey, email) {
   const priceId = process.env[tier.priceEnv];
   if (!priceId) throw new Error(`Missing ${tier.priceEnv} — run npm run stripe:setup first`);
 
-  return stripe.checkout.sessions.create({
+  return stripeClient().checkout.sessions.create({
     mode: "subscription",
     line_items: [{ price: priceId, quantity: 1 }],
     customer_email: email || undefined,
     allow_promotion_codes: true,
-    success_url: `${APP_URL}/?checkout=success&email={CHECKOUT_SESSION_CUSTOMER_EMAIL}`,
-    cancel_url: `${APP_URL}/?checkout=cancel`,
+    success_url: `${APP_URL()}/?checkout=success&email={CHECKOUT_SESSION_CUSTOMER_EMAIL}`,
+    cancel_url: `${APP_URL()}/?checkout=cancel`,
     metadata: { tier: tierKey },
   });
 }
 
 // Verify + route Stripe webhook events. Returns a short summary string.
 export async function handleWebhook(rawBody, signature) {
+  const stripe = stripeClient();
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
   const event = stripe.webhooks.constructEvent(rawBody, signature, secret);
 
