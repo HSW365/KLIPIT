@@ -1,4 +1,4 @@
-FROM node:20-slim
+FROM node:22-slim
 
 # ffmpeg + fonts for rendering, python + yt-dlp for stream reading/segment download
 RUN apt-get update && apt-get install -y --no-install-recommends \
