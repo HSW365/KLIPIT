@@ -1,75 +1,118 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>KLIPIT — GTA6 Stream Clipper by HSW365</title>
-<meta name="description" content="Paste a GTA6 stream link. Klipit finds the viral moments and cuts ready-to-post clips. By HSW365." />
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="/styles.css" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Klipit | Paste a GTA 6 stream, get clips ready to post | HSW365</title>
+<meta name="description" content="Paste a GTA 6 stream link from YouTube, Twitch or Kick. Klipit finds the best moments and cuts them into vertical clips for TikTok, Reels and Shorts.">
+<meta name="theme-color" content="#0a0a0f">
+<link rel="canonical" href="https://klipit.onrender.com/">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://klipit.onrender.com/">
+<meta property="og:title" content="Klipit | Paste the stream. Post the clips.">
+<meta property="og:description" content="Paste a GTA 6 stream link from YouTube, Twitch or Kick. Klipit finds the best moments and cuts them into vertical clips for TikTok, Reels and Shorts.">
+
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%2064%2064%27%3E%3Crect%20width%3D%2764%27%20height%3D%2764%27%20rx%3D%278%27%20fill%3D%27%2322d3ee%27/%3E%3Ctext%20x%3D%2732%27%20y%3D%2747%27%20font-family%3D%27Arial%20Narrow%2CArial%27%20font-weight%3D%27900%27%20font-size%3D%2744%27%20text-anchor%3D%27middle%27%20fill%3D%27%230a0a0f%27%3EK%3C/text%3E%3C/svg%3E">
+<link rel="preload" as="font" type="font/woff2" href="hsw/fonts/barlow-condensed-latin-900-normal.woff2" crossorigin>
+<link rel="preload" as="font" type="font/woff2" href="hsw/fonts/inter-latin-wght-normal.woff2" crossorigin>
+<link rel="stylesheet" href="hsw/hsw.css">
+<style>:root{--acc:#22d3ee;--acc-ink:#0a0a0f}
+.cliprow{display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line)}
+.cliprow:last-child{border-bottom:0}
+.cliprow i{width:34px;height:60px;border-radius:3px;background:var(--card2);border:1px solid var(--line2);display:block}
+.cliprow b{display:block;font-size:15px;font-weight:600;color:#fff;line-height:1.3}
+.cliprow span{font-family:var(--mono);font-size:12.5px;color:var(--mut)}
+.cliprow em{font-style:normal;font-family:var(--mono);font-size:12.5px;color:var(--acc)}
+#tiers{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;align-items:stretch}
+.tier{position:relative;display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line2);border-top-width:4px;border-radius:6px;padding:clamp(24px,2.6vw,36px)}
+.tier.feature{border-color:var(--acc)}
+.tier h3{font-size:clamp(30px,2.6vw,40px)}
+.tier .pop{position:absolute;top:18px;right:18px;font-size:12.5px;font-weight:700;color:var(--acc-ink);background:var(--acc);padding:4px 9px;border-radius:99px;text-transform:lowercase}
+.tier .pop::first-letter{text-transform:uppercase}
+.tier .price{display:block;font-family:var(--disp);font-weight:900;font-size:clamp(64px,6vw,92px);line-height:.9;color:#fff;margin-top:18px;padding-bottom:18px;border-bottom:1px solid var(--line)}
+.tier .price small{font-family:var(--body);font-size:15px;font-weight:400;color:var(--mut);margin-left:8px}
+.tier ul{list-style:none;display:grid;gap:10px;margin:22px 0 28px;font-size:15.5px}
+.tier li{padding-left:18px;position:relative;color:var(--text)}
+.tier li::before{content:"";position:absolute;left:0;top:.62em;width:8px;height:2px;background:var(--acc)}
+.tier .btn{margin-top:auto;width:100%}
+.btn-primary{background:var(--acc);color:var(--acc-ink)}
+.btn-primary:hover{background:#fff}
+.btn-ghost{border-color:var(--line2);color:#fff;background:transparent}
+.btn-ghost:hover{border-color:#fff;background:#fff;color:#0a0a0f}
+.loading{color:var(--mut);padding:24px 0}
+#status{margin-top:14px;font-family:var(--mono);font-size:14px;color:var(--text2);min-height:1.5em}
+#status.err{color:#ff8a8a}
+.clips{display:grid;gap:10px;margin-top:14px}
+.clip{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:14px;border:1px solid var(--line2);border-radius:4px;background:var(--bg)}
+.clip .meta strong{display:block;color:#fff;font-size:15.5px}
+.clip .meta span{font-family:var(--mono);font-size:12.5px;color:var(--mut)}
+.clip .btn{height:44px;padding:0 16px;font-size:14.5px}
+@media (max-width:980px){#tiers{grid-template-columns:1fr}}
+</style>
+<script>document.documentElement.classList.add("js")</script>
+
+
 </head>
 <body>
-<nav class="nav">
-  <div class="brand">KLIP<span>IT</span></div>
-  <div class="nav-links">
-    <a href="#how">How it works</a>
-    <a href="#pricing">Pricing</a>
-    <a href="#clip" class="btn btn-ghost">Start clipping</a>
+<a class="skip" href="#main">Skip to content</a>
+<div class="util"><div class="wrap"><span class="util-l">Klipit is a product of HSW365 Media LLC. Billed monthly through Stripe.</span><span class="util-r"><a href="#clip">I already subscribe</a></span></div></div>
+<header class="nav">
+  <div class="wrap">
+    <a class="logo" href="#top" aria-label="Klipit home"><span class="logo-mark" aria-hidden="true">K</span><span><b>Klipit</b><small>GTA 6 stream clipper</small></span></a>
+    <nav class="nav-links" aria-label="Page"><a href="#how">How it works</a><a href="#pricing">Plans</a><a href="#clip">Clip a stream</a><a href="#faq">Questions</a></nav>
+    <div class="nav-cta">
+      
+      <a class="btn btn-acc btn-sm" href="#pricing" >See plans</a>
+      <button class="menu-btn" type="button" aria-label="Menu" aria-expanded="false"><span></span></button>
+    </div>
   </div>
-</nav>
-
-<header class="hero">
-  <div class="tag">BY HSW365</div>
-  <h1>Paste a GTA6 stream.<br /><span class="grad">Get viral clips.</span></h1>
-  <p class="sub">Drop any GTA 6 stream link — YouTube, Twitch, Kick. Klipit reads the stream, Claude finds the funniest, most clutch, most unhinged moments, and cuts them into ready-to-post vertical clips. No editing. No timeline. Just clips.</p>
-  <div class="hero-cta">
-    <a href="#pricing" class="btn btn-primary">See plans</a>
-    <a href="#clip" class="btn btn-ghost">I already subscribe</a>
-  </div>
-  <div class="hero-note">Turn one stream into a week of content.</div>
+  <nav class="mnav" aria-label="Menu"><a href="#how">How it works</a><a href="#pricing">Plans</a><a href="#clip">Clip a stream</a><a href="#faq">Questions</a><a class="btn btn-acc" href="#pricing" >See plans</a></nav>
 </header>
-
-<section id="how" class="how">
-  <h2>How it works</h2>
-  <div class="steps">
-    <div class="step"><div class="num">01</div><h3>Paste the link</h3><p>Copy any GTA6 stream URL from the streamer you're watching and drop it in.</p></div>
-    <div class="step"><div class="num">02</div><h3>Claude finds the moments</h3><p>Klipit scans the stream and picks the clips most likely to pop off — fails, clutch plays, rage, chaos.</p></div>
-    <div class="step"><div class="num">03</div><h3>Download and post</h3><p>Vertical clips with hooks, cut and formatted for TikTok, Reels and Shorts. Number of clips scales with your plan.</p></div>
+<main id="main">
+<section class="hero" id="top">
+  <div class="wrap hero-grid">
+    <div>
+      <p class="status"><i></i>For GTA 6 streams on YouTube, Twitch and Kick.</p>
+      <h1 class="fit"><span>Paste the stream.</span><span>Post the clips.</span></h1>
+      <p class="lede">Drop in a GTA 6 stream link. Klipit reads the stream, finds the funniest, most clutch and most unhinged moments, and cuts them into vertical clips ready to post. No editing and no timeline.</p>
+      <div class="hero-ctas"><a class="btn btn-acc" href="#pricing" >See plans</a><a class="btn btn-line" href="#clip" >I already subscribe</a></div>
+      <p class="hero-fine">One stream can cover a week of posts. Cancel anytime.</p>
+    </div>
+    <div><div class="panel">
+  <div class="panel-top"><span class="avatar" aria-hidden="true">K</span><div><b>What comes back</b><span>Example result from one pasted stream</span></div></div>
+  <div class="ticket">
+    <div class="ticket-head"><span>Stream scanned</span><b>CLIPS READY</b></div>
+    <div class="cliprow"><i></i><div><b>Five stars in under a minute</b><span>412s to 447s</span></div><em>Vertical</em></div>
+    <div class="cliprow"><i></i><div><b>The getaway that should not have worked</b><span>1,930s to 1,972s</span></div><em>Vertical</em></div>
+    <div class="cliprow"><i></i><div><b>Chat calls it, streamer loses it</b><span>3,204s to 3,231s</span></div><em>Vertical</em></div>
+  </div>
+  <p class="panel-foot">Titles and times here are an example. Yours come from the stream you paste. Each clip has a download button.</p>
+</div></div>
   </div>
 </section>
-
-<section id="pricing" class="pricing">
-  <h2>Plans</h2>
-  <p class="pricing-sub">More clips, higher quality, longer streams as you go up.</p>
-  <div id="tiers" class="tiers"><div class="loading">Loading plans…</div></div>
-  <div class="pricing-foot">Cancel anytime. Billed monthly via Stripe.</div>
-</section>
-
-<section id="clip" class="clipper">
-  <h2>Clip a stream</h2>
-  <p class="clipper-sub">For active subscribers. Enter the email on your plan and the stream link.</p>
-  <div class="clip-card">
-    <label>Subscriber email</label>
-    <input id="email" type="email" placeholder="you@email.com" autocomplete="email" />
-    <label>GTA6 stream link</label>
-    <input id="url" type="url" placeholder="https://youtube.com/watch?v=… or twitch.tv/videos/…" />
-    <button id="go" class="btn btn-primary btn-block">Generate clips</button>
-    <div id="status" class="status"></div>
-    <div id="clips" class="clips"></div>
+<div class="plate"><div class="wrap"><div><b>3 sources</b><strong>YouTube, Twitch and Kick</strong><span>Paste the link to the stream or the VOD</span></div><div><b>Vertical</b><strong>Cut for the feed</strong><span>TikTok, Reels and Shorts</span></div><div><b>Up to 40</b><strong>Clips from one stream</strong><span>The number goes up with your plan</span></div><div><b>From $20</b><strong>A month</strong><span>Billed through Stripe. Cancel anytime.</span></div></div></div>
+<section class="block" id="how"><div class="wrap"><div class="sec-head"><h2>Three steps. No timeline.</h2><p class="lede">You never open an editor. You paste a link and download what comes back.</p></div><ol class="steps" style="--n:3"><li><h3>Paste the link</h3><p>Copy the GTA 6 stream link from the streamer you are watching and drop it in.</p></li><li><h3>Klipit finds the moments</h3><p>It scans the stream and picks the parts most likely to get shared: fails, clutch plays, rage and chaos.</p></li><li><h3>Download and post</h3><p>Each clip comes back vertical with a title, ready for TikTok, Reels and Shorts.</p></li></ol></div></section>
+<section class="block tint" id="gets"><div class="wrap"><div class="split"><div><h2>What changes as you go up.</h2><p class="lede">Every plan clips the same way. Higher plans scan more of the stream, return more clips and sharpen the output.</p></div><dl class="deflist" style="margin-top:0"><div><dt>Clips</dt><dd>3 per stream on Starter, 15 on Pro, 40 on Elite</dd></div><div><dt>Stream length</dt><dd>Scans up to 30 minutes on Starter, 2 hours on Pro, 8 hours on Elite</dd></div><div><dt>Quality</dt><dd>720p on Starter. 1080p on Pro and Elite</dd></div><div><dt>Captions</dt><dd>Burned in on Pro and Elite</dd></div><div><dt>Watermark</dt><dd>Klipit watermark on Starter. None on Pro and Elite</dd></div></dl></div></div></section>
+<section class="block" id="pricing"><div class="wrap"><div class="sec-head"><h2>Three plans.</h2><p class="lede">More clips, longer streams and sharper video as you go up. Billed monthly through Stripe.</p></div><div id="tiers"><div class="loading">Loading plans</div></div><p class="plan-note">Cancel anytime. Trouble checking out? Email <a href="mailto:hsw365media@gmail.com">hsw365media@gmail.com</a>.</p></div></section>
+<section class="block tint" id="clip"><div class="wrap"><div class="split"><div><h2>Clip a stream.</h2><p class="lede">For active subscribers. Enter the email on your plan and the stream link.</p><ul class="checks"><li>YouTube, Twitch or Kick link</li><li>Status updates while it works</li><li>A download button on every clip</li></ul></div><div class="panel"><label class="field" style="margin-top:0"><span>Subscriber email</span><input id="email" type="email" autocomplete="email" placeholder="you@email.com"></label><label class="field"><span>GTA 6 stream link</span><input id="url" type="url" placeholder="https://www.youtube.com/watch?v=" autocapitalize="none"></label><button id="go" class="btn btn-acc" type="button" style="width:100%;margin-top:14px">Generate clips</button><div id="status" class="status" role="status"></div><div id="clips" class="clips"></div></div></div></div></section>
+<section class="block" id="about"><div class="wrap"><p class="motto">Turn negative into positive.<cite>The HSW365 motto. Hours of stream nobody rewatches become clips people share.</cite></p><div class="about-grid"><div class="about-body"><h2>Who is behind Klipit</h2><p class="lede">Klipit is built and run by HSW365 Media LLC in New Jersey.</p><p>HSW365 Media LLC is run by its founder, Elvin Torres Sr., a U.S. Army veteran, author and speaker. He builds each product himself and answers the email himself.</p></div><div class="creds"><div><b>Three sources</b><span>YouTube, Twitch and Kick</span></div><div><b>Made for the feed</b><span>Vertical clips with a title</span></div><div><b>Monthly</b><span>Billed through Stripe, cancel anytime</span></div></div></div></div></section>
+<section class="block tint" id="family"><div class="wrap"><div class="sec-head"><h2>More from HSW365.</h2><p class="lede">Klipit is one of five products HSW365 Media builds and runs.</p></div><div class="ledger"><a href="https://hsw365.github.io/calltwin/"><div><h3>CallTwin</h3><span>AI receptionist</span></div><div><span class="k">Made for</span><span class="v">Local businesses</span></div><p>Answers the business line day and night, takes the caller&#x27;s name, number and the job, and sends it to the owner.</p><span class="go">Open CallTwin</span></a><a href="https://hsw365.github.io/queenee/"><div><h3>QUEENEE</h3><span>Website building</span></div><div><span class="k">Made for</span><span class="v">Indie artists and businesses</span></div><p>Real websites built from your details. Music, video, merch, booking and contact in one place you own.</p><span class="go">Open QUEENEE</span></a><a href="https://hsw365.github.io/iRUN/"><div><h3>iRun</h3><span>Short video, made and posted</span></div><div><span class="k">Made for</span><span class="v">Brands that need to post daily</span></div><p>Writes the script, records the voiceover, cuts the vertical video and posts it to TikTok and Instagram on a schedule.</p><span class="go">Open iRun</span></a><a href="https://hsw365.github.io/STUDIO365/"><div><h3>HSW365studio</h3><span>Vocal studio in the browser</span></div><div><span class="k">Made for</span><span class="v">Artists and writers</span></div><p>Record over your beat, tune the vocal to key, mix it, master it to streaming loudness and export the file.</p><span class="go">Open HSW365studio</span></a><div class="here"><div><h3>Klipit</h3><span>Stream clipper</span></div><div><span class="k">Made for</span><span class="v">Streamers and clip pages</span></div><p>Paste a stream link and get the best moments back as vertical clips ready to post.</p><span></span></div></div></div></section>
+<section class="block" id="faq"><div class="wrap"><div class="faq"><div><h2>Questions.</h2><p class="lede" style="margin-top:20px">Short answers before you subscribe.</p></div><div class="faq-list"><details open><summary>Which streams work?</summary><p>GTA 6 streams and VODs from YouTube, Twitch and Kick. Paste the link the same way you would share it.</p></details><details><summary>How many clips do I get?</summary><p>It depends on your plan: 3 per stream on Starter, 15 on Pro and 40 on Elite.</p></details><details><summary>How do I pay and cancel?</summary><p>Plans are billed monthly through Stripe. You can cancel anytime.</p></details><details><summary>Who owns the clips?</summary><p>You are responsible for the rights to any stream you submit. Klipit is not affiliated with Rockstar Games or Take-Two.</p></details><details><summary>Something is not working. Who do I contact?</summary><p>Email <a class="tlink" href="mailto:hsw365media@gmail.com">hsw365media@gmail.com</a> with the email on your plan and the stream link.</p></details></div></div></div></section>
+<section class="band"><div class="wrap"><div><h2>Turn one stream into a week of posts.</h2><p>Pick a plan, paste a link, download the clips.</p></div><div class="band-ctas"><a class="btn btn-ink" href="#pricing" >See plans</a><a class="btn btn-inkline" href="#clip" >I already subscribe</a></div></div></section>
+</main>
+<footer>
+  <div class="wrap">
+    <div class="foot">
+      <div><a class="logo" href="#top" aria-label="Klipit home"><span class="logo-mark" aria-hidden="true">K</span><span><b>Klipit</b><small>GTA 6 stream clipper</small></span></a><p>Paste a GTA 6 stream link and get the best moments back as vertical clips.</p></div>
+      <div><h4>Klipit</h4><ul><li><a href="#how">How it works</a></li><li><a href="#pricing">Plans</a></li><li><a href="#clip">Clip a stream</a></li></ul></div>
+      <div><h4>More from HSW365</h4><ul><li><a href="https://hsw365.github.io/calltwin/">CallTwin</a></li><li><a href="https://hsw365.github.io/queenee/">QUEENEE</a></li><li><a href="https://hsw365.github.io/iRUN/">iRun</a></li><li><a href="https://hsw365.github.io/STUDIO365/">HSW365studio</a></li></ul></div>
+      <div><h4>Contact</h4><ul><li><a href="mailto:hsw365media@gmail.com">hsw365media@gmail.com</a></li><li><a href="https://hsw365.co">hsw365.co</a></li></ul></div>
+    </div>
+    <div class="legal"><p>Not affiliated with or endorsed by Rockstar Games or Take-Two. GTA and Grand Theft Auto are trademarks of their respective owners. You are responsible for the rights to any stream you submit.</p><p>&copy; 2026 HSW365 Media LLC. Turn negative into positive.</p></div>
   </div>
-</section>
-
-<footer class="footer">
-  <div class="brand small">KLIP<span>IT</span></div>
-  <div class="foot-meta">
-    <span>A HSW365 product</span>
-    <a href="mailto:hsw365media@gmail.com">hsw365media@gmail.com</a>
-  </div>
-  <div class="foot-legal">Not affiliated with or endorsed by Rockstar Games or Take-Two. GTA and Grand Theft Auto are trademarks of their respective owners. You are responsible for the rights to any stream you submit.</div>
 </footer>
-
+<div class="sticky"><a class="btn btn-acc" href="#pricing" >See plans</a></div>
+<script src="hsw/hsw.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>
