@@ -39,7 +39,10 @@ export async function clipStream(sourceUrl, tier, onProgress = () => {}, onClip 
     const transcript = await fetchTranscript(sourceUrl, work);
     if (transcript.length > 20) {
       onProgress("Finding the best moments");
-      picks = await pickHighlights(transcript, tier.clipsPerStream, window);
+      picks = await pickHighlights(transcript, tier.clipsPerStream, window).catch((e) => {
+        console.error("[highlights] caption pick failed:", e.message);
+        return [];
+      });
     }
     if (!picks.length) {
       picks = await audioHighlights(sourceUrl, window, tier.clipsPerStream, work, onProgress);
@@ -57,7 +60,7 @@ export async function clipStream(sourceUrl, tier, onProgress = () => {}, onClip 
         clips.push(clip);
         await onClip(clip, i);
       } catch (e) {
-        console.error(`[clipper] clip ${i} failed:`, firstLine(e.stderr || e.message));
+        console.error(`[clipper] clip ${i} failed:`, lastLine(e.stderr || e.message));
       }
     }
     if (!clips.length) throw new ClipError("The clips could not be downloaded from that link. The VOD may be private, deleted or region locked.");
@@ -209,27 +212,57 @@ async function mediaUrls(url, res) {
   const { stdout } = await run("yt-dlp", [...YTDLP, "-f", `bv*[height<=${res}]+ba/b[height<=${res}]/b`, "-g", url], { timeout: 120e3 });
   const urls = stdout.trim().split("\n").filter((l) => /^https?:/.test(l));
   if (!urls.length) throw new ClipError("Could not open the video for that link.");
-  return urls.slice(0, 2);
+  return { urls: urls.slice(0, 2), page: url, format: `bv*[height<=${res}]+ba/b[height<=${res}]/b` };
 }
 
 async function renderClip(media, pick, tier, work, i) {
   const out = path.join(work, `clip_${i}.mp4`);
-  const dur = String(pick.end - pick.start);
-  const inputs = media.flatMap((u) => ["-ss", String(pick.start), "-t", dur, "-i", u]);
+  const dur = pick.end - pick.start;
+  // A: read just the moment straight from the stream
+  try {
+    const inputs = media.urls.flatMap((u) => ["-ss", String(pick.start), "-t", String(dur), "-i", u]);
+    await encode(inputs, media.urls.length > 1 ? "1:a?" : "0:a?", pick, tier, out);
+    if ((await seconds(out)) > dur * 0.6) return out;
+    console.error(`[clipper] clip ${i}: stream read came back short, retrying with a section download`);
+  } catch (e) {
+    console.error(`[clipper] clip ${i} direct read failed:`, lastLine(e.stderr || e.message));
+  }
+  // B: download the section, then encode from disk
+  const raw = path.join(work, `seg_${i}.mp4`);
+  const pad = 3;
+  await run("yt-dlp", [...YTDLP, "-f", media.format, "--download-sections", `*${Math.max(0, pick.start - pad)}-${pick.end + pad}`,
+    "--merge-output-format", "mp4", "-o", raw, media.page], { timeout: 10 * 60e3 });
+  const seg = existsSync(raw) ? raw : path.join(work, (await fs.readdir(work)).find((f) => f.startsWith(`seg_${i}.`)) || "missing");
+  const lead = pick.start - Math.max(0, pick.start - pad);
+  await encode(["-ss", String(lead), "-t", String(dur), "-i", seg], "0:a?", pick, tier, out);
+  await fs.rm(seg, { force: true }).catch(() => {});
+  if ((await seconds(out)) < dur * 0.6) throw new Error("clip came back empty");
+  return out;
+}
+
+async function encode(inputs, audioMap, pick, tier, out) {
   const W = tier.resolution === 1080 ? 1080 : 720;
   const H = Math.round((W * 16) / 9);
-  // Feed-ready vertical: blurred fill behind the full gameplay frame, so nothing important gets cropped off.
-  // blur at quarter size then scale up: same look, a fraction of the CPU
-  let fc = `[0:v]split[a][b];[a]scale=${W / 4}:${H / 4}:force_original_aspect_ratio=increase,crop=${W / 4}:${H / 4},boxblur=6:2,eq=brightness=-0.12,scale=${W}:${H}[bg];` +
-    `[b]scale=${W}:-2[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2`;
+  // Feed-ready vertical: the full gameplay frame over a blurred fill, so nothing important gets cropped off.
+  // Blur is done at quarter size then scaled up: same look, a fraction of the CPU.
+  let fc = `[0:v]fps=30,split[a][b];[a]scale=${W / 4}:${H / 4}:force_original_aspect_ratio=increase,crop=${W / 4}:${H / 4},boxblur=6:2,eq=brightness=-0.12,scale=${W}:${H}[bg];` +
+    `[b]scale=${W}:-2:flags=fast_bilinear[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2`;
   if (tier.captions && pick.caption && HAS_FONT) fc += "," + drawtext(pick.caption, "y=h*0.16", Math.round(W / 17), 1, true);
   if (tier.watermark && HAS_FONT) fc += "," + drawtext("KLIPIT", "y=h*0.86", Math.round(W / 26), 0.7, false);
   fc += ",format=yuv420p[v]";
+  await run("ffmpeg", ["-y", "-loglevel", "error", ...inputs, "-filter_complex", fc, "-map", "[v]", "-map", audioMap,
+    "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23", "-threads", "0", "-c:a", "aac", "-b:a", "160k",
+    "-movflags", "+faststart", out], { timeout: 10 * 60e3, maxBuffer: 16 << 20 });
+}
 
-  await run("ffmpeg", ["-y", "-loglevel", "error", "-reconnect", "1", ...inputs, "-filter_complex", fc, "-map", "[v]", "-map", media.length > 1 ? "1:a?" : "0:a?",
-    "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23", "-r", "30", "-threads", "2", "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", out],
-    { timeout: 10 * 60e3 });
-  return out;
+async function seconds(file) {
+  try {
+    const { stdout } = await run("ffprobe", ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=duration:format=duration",
+      "-of", "default=nw=1:nk=1", file]);
+    return Math.max(0, ...stdout.split("\n").map(Number).filter(Number.isFinite));
+  } catch {
+    return 0;
+  }
 }
 
 function drawtext(text, y, size, alpha, box) {
@@ -253,4 +286,5 @@ function wrapText(s, n) {
 
 const avg = (a) => a.reduce((x, y) => x + y, 0) / (a.length || 1);
 function toSec(t) { const [h, m, s] = t.split(":"); return Math.round(+h * 3600 + +m * 60 + parseFloat(s)); }
+function lastLine(s) { return String(s).trim().split("\n").filter((l) => !/Skip \(/.test(l)).pop() || String(s); }
 function firstLine(s) { return String(s).split("\n").find((l) => l.trim()) || String(s); }
