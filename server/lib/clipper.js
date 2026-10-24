@@ -1,160 +1,210 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import fs from "node:fs/promises";
 import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { pickHighlights } from "./highlights.js";
+import { fileURLToPath } from "node:url";
+import { pickHighlights, rankCandidates } from "./highlights.js";
 
 const run = promisify(execFile);
+const HERE = path.dirname(fileURLToPath(import.meta.url));
 const FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf";
 const HAS_FONT = existsSync(FONT);
+const WORK_ROOT = existsSync("/data") ? "/data/work" : os.tmpdir();
+const YTDLP = ["--no-playlist", "--no-warnings", "--socket-timeout", "30", "--retries", "5"];
 
-// tier: object from tiers.js  { clipsPerStream, maxMinutes, resolution, watermark, captions }
-// onProgress(msg) optional
+export class ClipError extends Error {}
+
+// tier: { clipsPerStream, maxMinutes, resolution, watermark, captions }
 export async function clipStream(sourceUrl, tier, onProgress = () => {}) {
-  const work = await fs.mkdtemp(path.join(os.tmpdir(), "klipit-"));
+  await fs.mkdir(WORK_ROOT, { recursive: true });
+  const work = await fs.mkdtemp(path.join(WORK_ROOT, "klipit-"));
   try {
-    onProgress("fetching stream transcript");
+    onProgress("Reading the stream");
+    const info = await probe(sourceUrl);
+    if (info.isLive) throw new ClipError("That stream is still live. Paste the link again once it ends and the VOD is up.");
+    const window = Math.min(tier.maxMinutes * 60, info.duration || tier.maxMinutes * 60);
+
+    let picks = [];
+    onProgress("Checking for captions");
     const transcript = await fetchTranscript(sourceUrl, work);
-    if (!transcript.length) {
-      throw new Error(
-        "No captions found on this stream. Klipit uses stream captions to find highlights — " +
-          "pick a VOD that has captions, or upgrade the plan for whisper transcription."
-      );
+    if (transcript.length > 20) {
+      onProgress("Finding the best moments");
+      picks = await pickHighlights(transcript, tier.clipsPerStream, window);
     }
+    if (!picks.length) {
+      picks = await audioHighlights(sourceUrl, window, tier.clipsPerStream, work, onProgress);
+    }
+    if (!picks.length) throw new ClipError("Klipit could not find clear highlight moments in that stream. Try a longer stream or a different VOD.");
 
-    onProgress("finding highlights with Claude");
-    const picks = await pickHighlights(transcript, tier.clipsPerStream, tier.maxMinutes * 60);
-    if (!picks.length) throw new Error("Claude found no strong clip moments in the scanned window.");
-
+    picks.sort((a, b) => a.start - b.start);
     const clips = [];
     for (let i = 0; i < picks.length; i++) {
-      const p = picks[i];
-      onProgress(`rendering clip ${i + 1}/${picks.length}: ${p.title}`);
+      onProgress(`Cutting clip ${i + 1} of ${picks.length}`);
       try {
-        const file = await renderClip(sourceUrl, p, tier, work, i);
-        clips.push({ ...p, file });
+        clips.push({ ...picks[i], file: await renderClip(sourceUrl, picks[i], tier, work, i) });
       } catch (e) {
-        // one bad segment shouldn't kill the whole batch
-        console.error(`[clipper] clip ${i} failed:`, e.message);
+        console.error(`[clipper] clip ${i} failed:`, firstLine(e.stderr || e.message));
       }
     }
-    if (!clips.length) throw new Error("All clip renders failed — source may be geo-blocked or removed.");
-    return { work, clips };
+    if (!clips.length) throw new ClipError("The clips could not be downloaded from that link. The VOD may be private, deleted or region locked.");
+    return { work, clips, title: info.title };
   } catch (e) {
     await fs.rm(work, { recursive: true, force: true }).catch(() => {});
     throw e;
   }
 }
 
-async function fetchTranscript(url, work) {
-  await run("yt-dlp", [
-    "--skip-download",
-    "--write-auto-subs",
-    "--write-subs",
-    "--sub-langs",
-    "en.*",
-    "--sub-format",
-    "vtt",
-    "--no-playlist",
-    "-o",
-    path.join(work, "src.%(ext)s"),
-    url,
-  ]).catch((e) => {
-    throw new Error(`yt-dlp could not read that link: ${firstLine(e.stderr || e.message)}`);
-  });
+async function probe(url) {
+  try {
+    const { stdout } = await run("yt-dlp", [...YTDLP, "--skip-download", "--print", "%(title)s\t%(duration)s\t%(is_live)s", url], { maxBuffer: 1 << 20, timeout: 90e3 });
+    const [title, dur, live] = stdout.trim().split("\n").pop().split("\t");
+    return { title: title || "Stream", duration: Number(dur) || 0, isLive: live === "True" };
+  } catch (e) {
+    const msg = firstLine(e.stderr || e.message);
+    if (/sign in|bot/i.test(msg)) throw new ClipError("YouTube blocked the request for this video. Try the Twitch or Kick VOD of the same stream.");
+    if (/unsupported url/i.test(msg)) throw new ClipError("That link is not a YouTube, Twitch or Kick video.");
+    throw new ClipError(`Could not open that link. ${msg.replace(/^ERROR:\s*/, "")}`);
+  }
+}
 
-  const files = await fs.readdir(work);
-  const vtt = files.find((f) => f.endsWith(".vtt"));
-  if (!vtt) return [];
-  return parseVtt(await fs.readFile(path.join(work, vtt), "utf8"));
+async function fetchTranscript(url, work) {
+  try {
+    await run("yt-dlp", [...YTDLP, "--skip-download", "--write-auto-subs", "--write-subs", "--sub-langs", "en.*,en", "--sub-format", "vtt",
+      "-o", path.join(work, "src.%(ext)s"), url], { timeout: 120e3 });
+  } catch {
+    return [];
+  }
+  const vtt = (await fs.readdir(work)).find((f) => f.endsWith(".vtt"));
+  return vtt ? parseVtt(await fs.readFile(path.join(work, vtt), "utf8")) : [];
+}
+
+// No captions (most Twitch/Kick VODs): find the loudest reactions in the audio, transcribe just those
+// windows locally, then let Claude pick and title the best ones.
+async function audioHighlights(url, windowSec, count, work, onProgress) {
+  onProgress("Listening to the stream");
+  const { stdout: audioUrl } = await run("yt-dlp", [...YTDLP, "-f", "bestaudio/worst", "-g", url], { timeout: 90e3 });
+  const src = audioUrl.trim().split("\n")[0];
+  const rms = await loudnessPerSecond(src, windowSec, (s) => onProgress(`Listening to the stream (${Math.min(99, Math.round((s / windowSec) * 100))}%)`));
+  if (rms.length < 30) return [];
+
+  // smooth over 3s, score against a rolling 2-minute baseline so loud games don't drown everything
+  const sm = rms.map((_, i) => avg(rms.slice(Math.max(0, i - 1), i + 2)));
+  const score = sm.map((v, i) => v - avg(sm.slice(Math.max(0, i - 60), i + 60)));
+  const order = score.map((v, i) => [v, i]).sort((a, b) => b[0] - a[0]);
+  const peaks = [];
+  const want = Math.min(count * 2, count + 12);
+  for (const [, i] of order) {
+    if (peaks.length >= want) break;
+    if (peaks.every((p) => Math.abs(p - i) > 45)) peaks.push(i);
+  }
+  const cands = peaks.map((p) => ({ start: Math.max(0, p - 22), end: Math.min(rms.length, p + 13), peak: p, loud: +score[p].toFixed(1), text: "" }));
+
+  onProgress("Transcribing the loudest moments");
+  const wavs = [];
+  for (let i = 0; i < cands.length; i++) {
+    const f = path.join(work, `cand_${i}.wav`);
+    try {
+      await run("ffmpeg", ["-y", "-loglevel", "error", "-ss", String(cands[i].start), "-t", String(cands[i].end - cands[i].start), "-i", src,
+        "-ac", "1", "-ar", "16000", f], { timeout: 120e3 });
+      wavs.push(f);
+    } catch {
+      wavs.push(null);
+    }
+  }
+  try {
+    const ok = wavs.filter(Boolean);
+    const { stdout } = await run("python3", [path.join(HERE, "transcribe.py"), ...ok], { timeout: 15 * 60e3, maxBuffer: 8 << 20 });
+    const texts = JSON.parse(stdout.trim().split("\n").pop());
+    let k = 0;
+    wavs.forEach((w, i) => { if (w) cands[i].text = texts[k++] || ""; });
+  } catch (e) {
+    console.error("[clipper] transcribe failed:", firstLine(e.stderr || e.message));
+  }
+
+  onProgress("Picking the best moments");
+  return rankCandidates(cands, count);
+}
+
+function loudnessPerSecond(src, windowSec, onSec) {
+  return new Promise((resolve, reject) => {
+    const args = ["-hide_banner", "-nostats", "-t", String(windowSec), "-i", src, "-vn", "-ac", "1",
+      "-af", "aresample=8000,asetnsamples=n=8000:p=0,astats=metadata=1:reset=1,ametadata=print:key=lavfi.astats.Overall.RMS_level:file=-",
+      "-f", "null", "-"];
+    const p = spawn("ffmpeg", args);
+    const vals = []; let buf = ""; let last = 0;
+    p.stdout.on("data", (d) => {
+      buf += d;
+      const lines = buf.split("\n"); buf = lines.pop();
+      for (const l of lines) {
+        const m = l.match(/RMS_level=(-?[\d.]+|-inf)/);
+        if (m) {
+          vals.push(m[1] === "-inf" ? -90 : Math.max(-90, Number(m[1])));
+          if (vals.length - last >= 300) { last = vals.length; onSec(vals.length); }
+        }
+      }
+    });
+    p.stderr.on("data", () => {});
+    p.on("error", reject);
+    p.on("close", () => resolve(vals));
+  });
 }
 
 function parseVtt(raw) {
   const out = [];
-  const blocks = raw.replace(/\r/g, "").split("\n\n");
-  for (const b of blocks) {
+  for (const b of raw.replace(/\r/g, "").split("\n\n")) {
     const m = b.match(/(\d{2}:\d{2}:\d{2}\.\d{3})\s+-->\s+(\d{2}:\d{2}:\d{2}\.\d{3})/);
     if (!m) continue;
-    const text = b
-      .split("\n")
-      .filter((l) => !l.includes("-->") && !/^\d+$/.test(l.trim()) && l.trim() !== "WEBVTT")
-      .join(" ")
-      .replace(/<[^>]+>/g, "")
-      .trim();
-    if (!text) continue;
-    out.push({ start: toSec(m[1]), end: toSec(m[2]), text });
+    const text = b.split("\n").filter((l) => !l.includes("-->") && !/^\d+$/.test(l.trim()) && l.trim() !== "WEBVTT")
+      .join(" ").replace(/<[^>]+>/g, "").trim();
+    if (text) out.push({ start: toSec(m[1]), end: toSec(m[2]), text });
   }
-  // de-dupe consecutive identical auto-caption lines
   return out.filter((c, i) => i === 0 || c.text !== out[i - 1].text);
 }
 
 async function renderClip(url, pick, tier, work, i) {
   const raw = path.join(work, `seg_${i}.mp4`);
   const out = path.join(work, `clip_${i}.mp4`);
-  const section = `*${pick.start}-${pick.end}`;
+  await run("yt-dlp", [...YTDLP, "-f", `bv*[height<=${tier.resolution}]+ba/b[height<=${tier.resolution}]/b`,
+    "--download-sections", `*${pick.start}-${pick.end}`, "--force-keyframes-at-cuts", "--merge-output-format", "mp4", "-o", raw, url],
+    { timeout: 10 * 60e3 });
+  const seg = existsSync(raw) ? raw : path.join(work, (await fs.readdir(work)).find((f) => f.startsWith(`seg_${i}.`)));
 
-  await run("yt-dlp", [
-    "-f",
-    `bv*[height<=${tier.resolution === 1080 ? 1920 : 1280}]+ba/b`,
-    "--download-sections",
-    section,
-    "--force-keyframes-at-cuts",
-    "--no-playlist",
-    "--recode-video",
-    "mp4",
-    "-o",
-    raw,
-    url,
-  ]);
+  const W = tier.resolution === 1080 ? 1080 : 720;
+  const H = Math.round((W * 16) / 9);
+  // Feed-ready vertical: blurred fill behind the full gameplay frame, so nothing important gets cropped off.
+  let fc = `[0:v]split[a][b];[a]scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},boxblur=24:2,eq=brightness=-0.12[bg];` +
+    `[b]scale=${W}:-2[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2`;
+  if (tier.captions && pick.caption && HAS_FONT) fc += "," + drawtext(pick.caption, "y=h*0.16", Math.round(W / 17), 1, true);
+  if (tier.watermark && HAS_FONT) fc += "," + drawtext("KLIPIT", "y=h*0.86", Math.round(W / 26), 0.7, false);
+  fc += ",format=yuv420p[v]";
 
-  const W = tier.resolution;           // 720 or 1080 (vertical width)
-  const H = Math.round((W * 16) / 9);  // 1280 or 1920
-
-  const filters = [`scale=${W}:${H}:force_original_aspect_ratio=increase`, `crop=${W}:${H}`];
-  if (tier.captions && pick.caption && HAS_FONT) {
-    filters.push(drawtext(pick.caption, `y=h-(h/6)`, Math.round(W / 22)));
-  }
-  if (tier.watermark && HAS_FONT) {
-    filters.push(drawtext("KLIPIT • HSW365", `y=h/14`, Math.round(W / 30), 0.85));
-  }
-
-  await run("ffmpeg", [
-    "-y",
-    "-i",
-    raw,
-    "-vf",
-    filters.join(","),
-    "-c:v",
-    "libx264",
-    "-preset",
-    "veryfast",
-    "-crf",
-    "23",
-    "-c:a",
-    "aac",
-    "-b:a",
-    "128k",
-    "-movflags",
-    "+faststart",
-    out,
-  ]);
+  await run("ffmpeg", ["-y", "-loglevel", "error", "-i", seg, "-filter_complex", fc, "-map", "[v]", "-map", "0:a?",
+    "-c:v", "libx264", "-preset", "veryfast", "-crf", "21", "-r", "30", "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", out],
+    { timeout: 10 * 60e3 });
   return out;
 }
 
-function drawtext(text, y, size, alpha = 1) {
-  const safe = text.replace(/[\\':]/g, (c) => "\\" + c).replace(/%/g, "\\%");
-  return (
-    `drawtext=fontfile=${FONT}:text='${safe}':fontcolor=white@${alpha}:fontsize=${size}:` +
-    `box=1:boxcolor=black@0.5:boxborderw=12:x=(w-text_w)/2:${y}`
-  );
+function drawtext(text, y, size, alpha, box) {
+  const lines = wrapText(text.toUpperCase(), 22);
+  return lines.map((l, k) => {
+    const safe = l.replace(/[\\':,]/g, (c) => "\\" + c).replace(/%/g, "\\%");
+    return `drawtext=fontfile=${FONT}:text='${safe}':fontcolor=white@${alpha}:fontsize=${size}:` +
+      (box ? `box=1:boxcolor=black@0.55:boxborderw=${Math.round(size / 3)}:` : `borderw=2:bordercolor=black@0.6:`) +
+      `x=(w-text_w)/2:${y}+${k * Math.round(size * 1.45)}`;
+  }).join(",");
 }
 
-function toSec(t) {
-  const [h, m, s] = t.split(":");
-  return Math.round(parseInt(h) * 3600 + parseInt(m) * 60 + parseFloat(s));
+function wrapText(s, n) {
+  const out = []; let cur = "";
+  for (const w of s.split(/\s+/)) {
+    if ((cur + " " + w).trim().length > n && cur) { out.push(cur); cur = w; } else cur = (cur + " " + w).trim();
+  }
+  if (cur) out.push(cur);
+  return out.slice(0, 3);
 }
-function firstLine(s) {
-  return String(s).split("\n").find((l) => l.trim()) || String(s);
-}
+
+const avg = (a) => a.reduce((x, y) => x + y, 0) / (a.length || 1);
+function toSec(t) { const [h, m, s] = t.split(":"); return Math.round(+h * 3600 + +m * 60 + parseFloat(s)); }
+function firstLine(s) { return String(s).split("\n").find((l) => l.trim()) || String(s); }

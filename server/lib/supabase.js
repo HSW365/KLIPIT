@@ -37,15 +37,21 @@ export async function upsertSubscriber({ email, stripeCustomerId, tier, status, 
 }
 
 export async function getSubscriberByEmail(email) {
+  // One email can have more than one row (comp + Stripe, or several Stripe customers). Prefer the
+  // best active row: real Stripe customer first, then comp, newest first.
   const { data, error } = await supaClient()
     .from("klipit_subscribers")
     .select("*")
     .eq("email", email?.toLowerCase())
     .eq("status", "active")
-    .maybeSingle();
+    .order("updated_at", { ascending: false });
   if (error) throw error;
-  return data;
+  if (!data?.length) return null;
+  const rank = (r) => (r.stripe_customer_id?.startsWith("cus_") ? 0 : r.stripe_customer_id?.startsWith("comp_") ? 1 : 2);
+  return [...data].sort((a, b) => rank(a) - rank(b))[0];
 }
+
+export const isComp = (sub) => !sub?.stripe_customer_id || sub.stripe_customer_id.startsWith("comp_");
 
 // --- clip jobs ---
 
@@ -68,6 +74,25 @@ export async function updateJob(id, patch) {
     .single();
   if (error) throw error;
   return data;
+}
+
+export async function listJobs(email, limit = 25) {
+  const { data, error } = await supaClient()
+    .from("klipit_jobs")
+    .select("id,source_url,source_title,status,progress,error,clips,created_at,updated_at")
+    .eq("email", email.toLowerCase())
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data || [];
+}
+
+export async function failStuckJobs() {
+  const { error } = await supaClient()
+    .from("klipit_jobs")
+    .update({ status: "failed", error: "Server restarted while this was running. Paste the link again.", updated_at: new Date().toISOString() })
+    .in("status", ["queued", "processing"]);
+  if (error) throw error;
 }
 
 export async function getJob(id) {

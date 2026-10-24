@@ -57,7 +57,7 @@ export async function pickHighlights(transcript, count, maxSeconds) {
     .filter((p) => Number.isFinite(p.start) && Number.isFinite(p.end) && p.end > p.start)
     .map((p) => ({
       start: Math.max(0, Math.floor(p.start)),
-      end: Math.min(Math.floor(p.start) + 45, Math.floor(p.end)),
+      end: Math.min(Math.floor(p.start) + 45, Math.max(Math.floor(p.end), Math.floor(p.start) + 15)),
       title: String(p.title || "GTA6 Clip").slice(0, 60),
       caption: String(p.caption || "").slice(0, 90),
     }))
@@ -68,4 +68,50 @@ function fmt(s) {
   const m = Math.floor(s / 60);
   const r = Math.floor(s % 60);
   return `${m}:${String(r).padStart(2, "0")}`;
+}
+
+// cands: [{ start, end, peak, loud, text }] from the audio pass. Returns up to `count` picks.
+export async function rankCandidates(cands, count) {
+  const fallback = () =>
+    [...cands].sort((a, b) => b.loud - a.loud).slice(0, count).map((c) => ({
+      start: c.start, end: c.end, title: `Moment at ${clock(c.peak)}`, caption: "",
+    }));
+  if (!cands.length) return [];
+  try {
+    const list = cands
+      .map((c, i) => `#${i} [${clock(c.start)}-${clock(c.end)}] loudness_spike=${c.loud}dB speech: ${c.text ? JSON.stringify(c.text.slice(0, 600)) : "(no clear speech)"}`)
+      .join("\n");
+    const resp = await anthropic().messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 3000,
+      system:
+        "You are a short-form editor for a GTA 6 stream clipping tool. Each candidate is a 35 second window around a spike " +
+        "in the streamer's audio (yelling, laughing, rage, chat-worthy reactions) with what was said. Pick the windows most " +
+        "likely to get shared on TikTok, Reels and Shorts. Prefer clear reactions and quotable lines. Return ONLY JSON.",
+      messages: [{
+        role: "user",
+        content: `Pick the best ${count} (or fewer if some are weak). Return a JSON array of {i (candidate number), title (<=60 chars, punchy, ` +
+          `no emojis, never invent events the speech does not support), caption (<=80 chars hook, no emojis)}. Best first.\n\n${list}`,
+      }],
+    });
+    const text = resp.content.map((b) => (b.type === "text" ? b.text : "")).join("").replace(/```json|```/g, "");
+    const m = text.match(/\[[\s\S]*\]/);
+    const picks = (m ? JSON.parse(m[0]) : []).filter((p) => cands[p.i]);
+    if (!picks.length) return fallback();
+    const seen = new Set();
+    return picks.filter((p) => !seen.has(p.i) && seen.add(p.i)).slice(0, count).map((p) => ({
+      start: cands[p.i].start, end: cands[p.i].end,
+      title: String(p.title || `Moment at ${clock(cands[p.i].peak)}`).slice(0, 60),
+      caption: String(p.caption || "").slice(0, 80),
+    }));
+  } catch (e) {
+    console.error("[highlights] rank failed:", e.message);
+    return fallback();
+  }
+}
+
+function clock(s) {
+  s = Math.floor(s);
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;
+  return (h ? `${h}:${String(m).padStart(2, "0")}` : `${m}`) + `:${String(r).padStart(2, "0")}`;
 }

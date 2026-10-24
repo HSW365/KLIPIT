@@ -48,6 +48,57 @@
 .clip .meta span{font-family:var(--mono);font-size:12.5px;color:var(--mut)}
 .clip .btn{height:44px;padding:0 16px;font-size:14.5px}
 @media (max-width:980px){#tiers{grid-template-columns:1fr}}
+.studio{background:var(--card);border:1px solid var(--line2);border-top:4px solid var(--acc);border-radius:6px;padding:clamp(20px,3vw,40px)}
+.gate{display:grid;grid-template-columns:1.4fr 1fr;gap:clamp(24px,4vw,56px)}
+.gate h3{font-size:clamp(30px,3vw,42px)}
+.gate p{color:var(--text2);margin-top:10px;max-width:52ch}
+.gate-form{display:grid;grid-template-columns:1fr 200px;gap:0 14px;margin-top:8px}
+.gate-form .btn,.gate-form .form-msg{grid-column:1/-1}.gate-form .btn{margin-top:16px}
+.gate-side{border-left:1px solid var(--line);padding-left:clamp(20px,3vw,40px);align-self:center}
+.gate-side b{font-family:var(--disp);font-size:28px;color:#fff;display:block}
+.gate-side .btn{margin-top:18px}
+input{width:100%;height:54px;background:var(--bg,#0a0a0f);border:1px solid var(--line2);border-radius:4px;color:#fff;padding:0 16px;font:inherit;font-size:16px}
+input:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px rgba(34,211,238,.18)}
+.form-msg{min-height:1.4em;margin-top:10px;font-size:14.5px;color:#ff8a8a}
+.form-msg.ok{color:var(--acc)}
+.app-bar{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;padding-bottom:20px;border-bottom:1px solid var(--line)}
+.who{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.who b{color:#fff;font-weight:600}.who span:last-child{color:var(--mut);font-size:14px}
+.pill{font-family:var(--mono);font-size:12.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;background:var(--acc);color:var(--acc-ink);padding:5px 10px;border-radius:99px}
+.app-actions{display:flex;gap:10px}
+.paste{display:grid;grid-template-columns:1fr auto;gap:12px;margin-top:22px}
+.paste input{height:64px;font-size:17px;font-family:var(--mono)}
+.paste .btn{height:64px;padding:0 34px;font-size:18px}
+.paste-note{color:var(--mut);font-size:14px;margin-top:2px}
+.jobs{display:grid;gap:18px;margin-top:26px}
+.job{border:1px solid var(--line2);border-radius:6px;background:#0d0d14;overflow:hidden}
+.job-head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;padding:16px 18px}
+.job-head b{color:#fff;display:block;font-size:16px;line-height:1.3;word-break:break-word}
+.job-head span{font-family:var(--mono);font-size:12.5px;color:var(--mut)}
+.state{font-family:var(--mono);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:5px 9px;border-radius:4px;white-space:nowrap}
+.state.done{background:rgba(34,211,238,.14);color:var(--acc)}.state.failed{background:rgba(239,68,68,.14);color:#ff8a8a}
+.state.processing,.state.queued{background:rgba(251,191,36,.14);color:#fbbf24}
+.bar{height:3px;background:var(--line);overflow:hidden}.bar i{display:block;height:100%;width:40%;background:var(--acc);animation:slide 1.4s ease-in-out infinite}
+@keyframes slide{0%{transform:translateX(-100%)}100%{transform:translateX(260%)}}
+.job-msg{padding:0 18px 16px;font-family:var(--mono);font-size:14px;color:var(--text2)}.job-msg.err{color:#ff8a8a}
+.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:14px;padding:0 18px 18px}
+.kc{background:var(--card);border:1px solid var(--line);border-radius:6px;overflow:hidden;display:flex;flex-direction:column}
+.kc video{width:100%;aspect-ratio:9/16;background:#000;display:block;object-fit:cover}
+.kc-b{padding:12px;display:grid;gap:8px;flex:1}
+.kc-b b{color:#fff;font-size:14.5px;line-height:1.3}.kc-b span{font-family:var(--mono);font-size:12px;color:var(--mut)}
+.kc-a{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:auto}
+.kc-a .btn{height:40px;padding:0 10px;font-size:13.5px;width:100%}
+.empty{color:var(--mut);padding:26px;border:1px dashed var(--line2);border-radius:6px;text-align:center}
+.modal{max-width:520px;width:calc(100% - 32px);background:var(--card);color:var(--text);border:1px solid var(--line2);border-top:4px solid var(--acc);border-radius:8px;padding:32px;margin:auto}
+.modal::backdrop{background:rgba(5,5,8,.78);backdrop-filter:blur(4px)}
+.modal h3{font-size:36px;margin-top:6px}.modal-p{color:var(--text2);margin-top:10px}
+.modal-k{font-family:var(--mono);font-size:13px;color:var(--acc);text-transform:uppercase;letter-spacing:.08em}
+.modal-x{position:absolute;right:14px;top:10px}.modal-x button{background:none;border:0;color:var(--mut);font-size:30px;cursor:pointer}
+.toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,30px);opacity:0;background:#fff;color:#0a0a0f;font-weight:600;padding:12px 18px;border-radius:6px;transition:.25s;z-index:99;pointer-events:none}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+.btn[disabled]{opacity:.55;cursor:wait}
+@media (max-width:860px){.gate{grid-template-columns:1fr}.gate-side{border-left:0;border-top:1px solid var(--line);padding:24px 0 0}.gate-form{grid-template-columns:1fr}.paste{grid-template-columns:1fr}.app-actions{width:100%}.app-actions .btn{flex:1}.nav-acct{display:none}}
+
 </style>
 <script>document.documentElement.classList.add("js")</script>
 
@@ -55,13 +106,13 @@
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
-<div class="util"><div class="wrap"><span class="util-l">Klipit is a product of HSW365 Media LLC. Billed monthly through Stripe.</span><span class="util-r"><a href="#clip">I already subscribe</a></span></div></div>
+<div class="util"><div class="wrap"><span class="util-l">Klipit is a product of HSW365 Media LLC. Billed monthly through Stripe.</span><span class="util-r"><a href="#clip" data-acct>Sign in</a></span></div></div>
 <header class="nav">
   <div class="wrap">
     <a class="logo" href="#top" aria-label="Klipit home"><span class="logo-mark" aria-hidden="true">K</span><span><b>Klipit</b><small>GTA 6 stream clipper</small></span></a>
     <nav class="nav-links" aria-label="Page"><a href="#how">How it works</a><a href="#pricing">Plans</a><a href="#clip">Clip a stream</a><a href="#faq">Questions</a></nav>
     <div class="nav-cta">
-      
+      <a class="btn btn-line btn-sm nav-acct" href="#clip" data-acct>Sign in</a>
       <a class="btn btn-acc btn-sm" href="#pricing" >See plans</a>
       <button class="menu-btn" type="button" aria-label="Menu" aria-expanded="false"><span></span></button>
     </div>
@@ -94,10 +145,45 @@
 <section class="block" id="how"><div class="wrap"><div class="sec-head"><h2>Three steps. No timeline.</h2><p class="lede">You never open an editor. You paste a link and download what comes back.</p></div><ol class="steps" style="--n:3"><li><h3>Paste the link</h3><p>Copy the GTA 6 stream link from the streamer you are watching and drop it in.</p></li><li><h3>Klipit finds the moments</h3><p>It scans the stream and picks the parts most likely to get shared: fails, clutch plays, rage and chaos.</p></li><li><h3>Download and post</h3><p>Each clip comes back vertical with a title, ready for TikTok, Reels and Shorts.</p></li></ol></div></section>
 <section class="block tint" id="gets"><div class="wrap"><div class="split"><div><h2>What changes as you go up.</h2><p class="lede">Every plan clips the same way. Higher plans scan more of the stream, return more clips and sharpen the output.</p></div><dl class="deflist" style="margin-top:0"><div><dt>Clips</dt><dd>3 per stream on Starter, 15 on Pro, 40 on Elite</dd></div><div><dt>Stream length</dt><dd>Scans up to 30 minutes on Starter, 2 hours on Pro, 8 hours on Elite</dd></div><div><dt>Quality</dt><dd>720p on Starter. 1080p on Pro and Elite</dd></div><div><dt>Captions</dt><dd>Burned in on Pro and Elite</dd></div><div><dt>Watermark</dt><dd>Klipit watermark on Starter. None on Pro and Elite</dd></div></dl></div></div></section>
 <section class="block" id="pricing"><div class="wrap"><div class="sec-head"><h2>Three plans.</h2><p class="lede">More clips, longer streams and sharper video as you go up. Billed monthly through Stripe.</p></div><div id="tiers"><div class="loading">Loading plans</div></div><p class="plan-note">Cancel anytime. Trouble checking out? Email <a href="mailto:hsw365media@gmail.com">hsw365media@gmail.com</a>.</p></div></section>
-<section class="block tint" id="clip"><div class="wrap"><div class="split"><div><h2>Clip a stream.</h2><p class="lede">For active subscribers. Enter the email on your plan and the stream link.</p><ul class="checks"><li>YouTube, Twitch or Kick link</li><li>Status updates while it works</li><li>A download button on every clip</li></ul></div><div class="panel"><label class="field" style="margin-top:0"><span>Subscriber email</span><input id="email" type="email" autocomplete="email" placeholder="you@email.com"></label><label class="field"><span>GTA 6 stream link</span><input id="url" type="url" placeholder="https://www.youtube.com/watch?v=" autocapitalize="none"></label><button id="go" class="btn btn-acc" type="button" style="width:100%;margin-top:14px">Generate clips</button><div id="status" class="status" role="status"></div><div id="clips" class="clips"></div></div></div></div></section>
+<section class="block tint" id="clip"><div class="wrap">
+  <div class="sec-head"><h2>Clip a stream.</h2><p class="lede">Paste a YouTube, Twitch or Kick VOD. Your clips land here with a preview, the caption and a download button.</p></div>
+  <div class="studio" id="studio">
+    <div class="gate" id="gate">
+      <div>
+        <h3>Sign in to your plan</h3>
+        <p>Use the email on your plan and the last 4 digits of the card it bills. Just subscribed? You are signed in automatically after checkout.</p>
+        <form id="signin" class="gate-form" novalidate>
+          <label class="field"><span>Email on your plan</span><input id="si-email" type="email" autocomplete="email" placeholder="you@email.com" required></label>
+          <label class="field"><span>Last 4 of your card</span><input id="si-proof" type="password" inputmode="numeric" autocomplete="off" placeholder="4242" maxlength="64" required></label>
+          <button class="btn btn-acc" type="submit">Sign in</button>
+          <p class="form-msg" id="si-msg" role="alert"></p>
+        </form>
+      </div>
+      <div class="gate-side">
+        <b>No plan yet?</b>
+        <p>Plans start at $20 a month. Pick one, pay through Stripe and you land right back here, signed in.</p>
+        <a class="btn btn-line" href="#pricing">See plans</a>
+      </div>
+    </div>
+    <div class="app" id="app" hidden>
+      <div class="app-bar">
+        <div class="who"><span class="pill" id="plan-pill">Plan</span><b id="me-email"></b><span id="me-renew"></span></div>
+        <div class="app-actions"><button class="btn btn-line btn-sm" id="billing" type="button">Manage billing</button><button class="btn btn-line btn-sm" id="signout" type="button">Sign out</button></div>
+      </div>
+      <form class="paste" id="paste" novalidate>
+        <label class="sr" for="url">Stream link</label>
+        <input id="url" type="url" autocapitalize="none" spellcheck="false" placeholder="Paste a YouTube, Twitch or Kick VOD link">
+        <button id="go" class="btn btn-acc" type="submit">Clip it</button>
+      </form>
+      <p class="form-msg" id="paste-msg" role="alert"></p>
+      <p class="paste-note" id="plan-note"></p>
+      <div id="jobs" class="jobs"></div>
+    </div>
+  </div>
+</div></section>
 <section class="block" id="about"><div class="wrap"><p class="motto">Turn negative into positive.<cite>The HSW365 motto. Hours of stream nobody rewatches become clips people share.</cite></p><div class="about-grid"><div class="about-body"><h2>Who is behind Klipit</h2><p class="lede">Klipit is built and run by HSW365 Media LLC in New Jersey.</p><p>HSW365 Media LLC is run by its founder, Elvin Torres Sr., a U.S. Army veteran, author and speaker. He builds each product himself and answers the email himself.</p></div><div class="creds"><div><b>Three sources</b><span>YouTube, Twitch and Kick</span></div><div><b>Made for the feed</b><span>Vertical clips with a title</span></div><div><b>Monthly</b><span>Billed through Stripe, cancel anytime</span></div></div></div></div></section>
 <section class="block tint" id="family"><div class="wrap"><div class="sec-head"><h2>More from HSW365.</h2><p class="lede">Klipit is one of five products HSW365 Media builds and runs.</p></div><div class="ledger"><a href="https://hsw365.github.io/calltwin/"><div><h3>CallTwin</h3><span>AI receptionist</span></div><div><span class="k">Made for</span><span class="v">Local businesses</span></div><p>Answers the business line day and night, takes the caller&#x27;s name, number and the job, and sends it to the owner.</p><span class="go">Open CallTwin</span></a><a href="https://hsw365.github.io/queenee/"><div><h3>QUEENEE</h3><span>Website building</span></div><div><span class="k">Made for</span><span class="v">Indie artists and businesses</span></div><p>Real websites built from your details. Music, video, merch, booking and contact in one place you own.</p><span class="go">Open QUEENEE</span></a><a href="https://hsw365.github.io/iRUN/"><div><h3>iRun</h3><span>Short video, made and posted</span></div><div><span class="k">Made for</span><span class="v">Brands that need to post daily</span></div><p>Writes the script, records the voiceover, cuts the vertical video and posts it to TikTok and Instagram on a schedule.</p><span class="go">Open iRun</span></a><a href="https://hsw365.github.io/STUDIO365/"><div><h3>HSW365studio</h3><span>Vocal studio in the browser</span></div><div><span class="k">Made for</span><span class="v">Artists and writers</span></div><p>Record over your beat, tune the vocal to key, mix it, master it to streaming loudness and export the file.</p><span class="go">Open HSW365studio</span></a><div class="here"><div><h3>Klipit</h3><span>Stream clipper</span></div><div><span class="k">Made for</span><span class="v">Streamers and clip pages</span></div><p>Paste a stream link and get the best moments back as vertical clips ready to post.</p><span></span></div></div></div></section>
-<section class="block" id="faq"><div class="wrap"><div class="faq"><div><h2>Questions.</h2><p class="lede" style="margin-top:20px">Short answers before you subscribe.</p></div><div class="faq-list"><details open><summary>Which streams work?</summary><p>GTA 6 streams and VODs from YouTube, Twitch and Kick. Paste the link the same way you would share it.</p></details><details><summary>How many clips do I get?</summary><p>It depends on your plan: 3 per stream on Starter, 15 on Pro and 40 on Elite.</p></details><details><summary>How do I pay and cancel?</summary><p>Plans are billed monthly through Stripe. You can cancel anytime.</p></details><details><summary>Who owns the clips?</summary><p>You are responsible for the rights to any stream you submit. Klipit is not affiliated with Rockstar Games or Take-Two.</p></details><details><summary>Something is not working. Who do I contact?</summary><p>Email <a class="tlink" href="mailto:hsw365media@gmail.com">hsw365media@gmail.com</a> with the email on your plan and the stream link.</p></details></div></div></div></section>
+<section class="block" id="faq"><div class="wrap"><div class="faq"><div><h2>Questions.</h2><p class="lede" style="margin-top:20px">Short answers before you subscribe.</p></div><div class="faq-list"><details open><summary>Which streams work?</summary><p>GTA 6 streams and VODs from YouTube, Twitch and Kick. Paste the link the same way you would share it.</p></details><details><summary>How many clips do I get?</summary><p>It depends on your plan: 3 per stream on Starter, 15 on Pro and 40 on Elite.</p></details><details><summary>Do Twitch and Kick VODs work without captions?</summary><p>Yes. When a VOD has no captions, Klipit listens to the stream audio, finds the biggest reactions, transcribes those moments and picks the best ones.</p></details><details><summary>Can I clip a stream while it is still live?</summary><p>Paste the link once the stream ends and the VOD is up. Klipit clips finished streams and VODs.</p></details><details><summary>How do I sign in on a new phone or computer?</summary><p>Use the email on your plan and the last 4 digits of the card it bills. You can update your card, see invoices or cancel from Manage billing.</p></details><details><summary>How do I pay and cancel?</summary><p>Plans are billed monthly through Stripe. Cancel anytime from Manage billing after you sign in. Your plan runs to the end of the month you paid for.</p></details><details><summary>Who owns the clips?</summary><p>You are responsible for the rights to any stream you submit. Klipit is not affiliated with Rockstar Games or Take-Two.</p></details><details><summary>Something is not working. Who do I contact?</summary><p>Email <a class="tlink" href="mailto:hsw365media@gmail.com">hsw365media@gmail.com</a> with the email on your plan and the stream link.</p></details></div></div></div></section>
 <section class="band"><div class="wrap"><div><h2>Turn one stream into a week of posts.</h2><p>Pick a plan, paste a link, download the clips.</p></div><div class="band-ctas"><a class="btn btn-ink" href="#pricing" >See plans</a><a class="btn btn-inkline" href="#clip" >I already subscribe</a></div></div></section>
 </main>
 <footer>
@@ -111,8 +197,20 @@
     <div class="legal"><p>Not affiliated with or endorsed by Rockstar Games or Take-Two. GTA and Grand Theft Auto are trademarks of their respective owners. You are responsible for the rights to any stream you submit.</p><p>&copy; 2026 HSW365 Media LLC. Turn negative into positive.</p></div>
   </div>
 </footer>
+<dialog class="modal" id="buy">
+  <form method="dialog" class="modal-x"><button aria-label="Close">&times;</button></form>
+  <p class="modal-k" id="buy-plan">Plan</p>
+  <h3>Where should we send your receipt?</h3>
+  <p class="modal-p">This email is your login. Next you pay securely on Stripe, then you land back here signed in.</p>
+  <form id="buy-form" novalidate>
+    <label class="field"><span>Email</span><input id="buy-email" type="email" autocomplete="email" placeholder="you@email.com" required></label>
+    <button class="btn btn-acc" type="submit" style="width:100%;margin-top:14px">Continue to secure checkout</button>
+    <p class="form-msg" id="buy-msg" role="alert"></p>
+  </form>
+</dialog>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 <div class="sticky"><a class="btn btn-acc" href="#pricing" >See plans</a></div>
 <script src="hsw/hsw.js"></script>
-<script src="/app.js"></script>
+<script src="/app.js?v=2"></script>
 </body>
 </html>
