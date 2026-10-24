@@ -171,7 +171,7 @@ function renderJobs(jobs) {
   });
   box.replaceChildren(frag);
 }
-const sig = (j) => [j.status, j.progress, j.error, j.position, (j.clips || []).length].join("|");
+const sig = (j) => [j.status, j.progress, j.error, j.position, (j.clips || []).length, j.source_title].join("|");
 
 function jobCard(j) {
   const title = j.source_title || j.source_url.replace(/^https?:\/\/(www\.)?/, "");
@@ -180,11 +180,19 @@ function jobCard(j) {
   let body = "";
   if (live) {
     const where = j.status === "queued" && j.position > 1 ? `Number ${j.position} in line. ` : "";
-    body = `<div class="bar"><i></i></div><p class="job-msg">${esc(where + (j.progress || "Waiting to start"))}</p>`;
+    body = `<div class="bar"><i></i></div><p class="job-msg">${esc(where + (j.progress || "Waiting to start"))}</p>` + gallery(j);
   } else if (j.status === "failed") {
-    body = `<p class="job-msg err">${esc(j.error || "This one did not finish.")}</p>`;
+    body = `<p class="job-msg err">${esc(j.error || "This one did not finish.")}</p>` + gallery(j);
   } else {
-    body = `<div class="gallery">${(j.clips || []).map((c, k) => `
+    body = gallery(j);
+  }
+  return `<article class="job" data-id="${j.id}" data-sig="${esc(sig(j))}">
+    <div class="job-head"><div><b>${esc(title)}</b><span>${ago(j.created_at)}${(j.clips || []).length ? ` · ${(j.clips || []).length} clips` : ""}</span></div>
+    <span class="state ${j.status}">${label}</span></div>${body}</article>`;
+}
+function gallery(j) {
+  if (!(j.clips || []).length) return "";
+  return `<div class="gallery">${(j.clips || []).map((c, k) => `
       <div class="kc">
         <video src="${esc(c.url)}#t=0.5" preload="metadata" controls playsinline></video>
         <div class="kc-b"><b>${esc(c.title)}</b><span>${clock(c.start)} to ${clock(c.end)}</span>
@@ -192,10 +200,6 @@ function jobCard(j) {
           <button class="btn btn-line" type="button" data-copy="${esc(c.caption || c.title)}">Copy caption</button></div>
         </div>
       </div>`).join("")}</div>`;
-  }
-  return `<article class="job" data-id="${j.id}" data-sig="${esc(sig(j))}">
-    <div class="job-head"><div><b>${esc(title)}</b><span>${ago(j.created_at)}${j.status === "done" ? ` · ${(j.clips || []).length} clips` : ""}</span></div>
-    <span class="state ${j.status}">${label}</span></div>${body}</article>`;
 }
 const fileName = (t, k) => `klipit-${String(k + 1).padStart(2, "0")}-${t.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40)}.mp4`;
 

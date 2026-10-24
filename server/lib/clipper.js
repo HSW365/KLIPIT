@@ -24,7 +24,7 @@ if (process.env.YT_COOKIES) {
 export class ClipError extends Error {}
 
 // tier: { clipsPerStream, maxMinutes, resolution, watermark, captions }
-export async function clipStream(sourceUrl, tier, onProgress = () => {}) {
+export async function clipStream(sourceUrl, tier, onProgress = () => {}, onClip = async () => {}) {
   await fs.mkdir(WORK_ROOT, { recursive: true });
   const work = await fs.mkdtemp(path.join(WORK_ROOT, "klipit-"));
   try {
@@ -47,11 +47,15 @@ export async function clipStream(sourceUrl, tier, onProgress = () => {}) {
     if (!picks.length) throw new ClipError("Klipit could not find clear highlight moments in that stream. Try a longer stream or a different VOD.");
 
     picks.sort((a, b) => a.start - b.start);
+    onProgress("Opening the video");
+    const media = await mediaUrls(sourceUrl, tier.resolution);
     const clips = [];
     for (let i = 0; i < picks.length; i++) {
       onProgress(`Cutting clip ${i + 1} of ${picks.length}`);
       try {
-        clips.push({ ...picks[i], file: await renderClip(sourceUrl, picks[i], tier, work, i) });
+        const clip = { ...picks[i], file: await renderClip(media, picks[i], tier, work, i) };
+        clips.push(clip);
+        await onClip(clip, i);
       } catch (e) {
         console.error(`[clipper] clip ${i} failed:`, firstLine(e.stderr || e.message));
       }
@@ -200,14 +204,18 @@ function parseVtt(raw) {
   return out.filter((c, i) => i === 0 || c.text !== out[i - 1].text);
 }
 
-async function renderClip(url, pick, tier, work, i) {
-  const raw = path.join(work, `seg_${i}.mp4`);
-  const out = path.join(work, `clip_${i}.mp4`);
-  await run("yt-dlp", [...YTDLP, "-f", `bv*[height<=${tier.resolution}]+ba/b[height<=${tier.resolution}]/b`,
-    "--download-sections", `*${Math.max(0, pick.start - 2)}-${pick.end + 2}`, "--merge-output-format", "mp4", "-o", raw, url],
-    { timeout: 10 * 60e3 });
-  const seg = existsSync(raw) ? raw : path.join(work, (await fs.readdir(work)).find((f) => f.startsWith(`seg_${i}.`)));
+// Direct stream URLs (video, plus audio when separate), resolved once per job.
+async function mediaUrls(url, res) {
+  const { stdout } = await run("yt-dlp", [...YTDLP, "-f", `bv*[height<=${res}]+ba/b[height<=${res}]/b`, "-g", url], { timeout: 120e3 });
+  const urls = stdout.trim().split("\n").filter((l) => /^https?:/.test(l));
+  if (!urls.length) throw new ClipError("Could not open the video for that link.");
+  return urls.slice(0, 2);
+}
 
+async function renderClip(media, pick, tier, work, i) {
+  const out = path.join(work, `clip_${i}.mp4`);
+  const dur = String(pick.end - pick.start);
+  const inputs = media.flatMap((u) => ["-ss", String(pick.start), "-t", dur, "-i", u]);
   const W = tier.resolution === 1080 ? 1080 : 720;
   const H = Math.round((W * 16) / 9);
   // Feed-ready vertical: blurred fill behind the full gameplay frame, so nothing important gets cropped off.
@@ -218,10 +226,8 @@ async function renderClip(url, pick, tier, work, i) {
   if (tier.watermark && HAS_FONT) fc += "," + drawtext("KLIPIT", "y=h*0.86", Math.round(W / 26), 0.7, false);
   fc += ",format=yuv420p[v]";
 
-  // the section download is cut on keyframes, so trim to the exact moment here
-  const lead = pick.start - Math.max(0, pick.start - 2);
-  await run("ffmpeg", ["-y", "-loglevel", "error", "-ss", String(lead), "-t", String(pick.end - pick.start), "-i", seg, "-filter_complex", fc, "-map", "[v]", "-map", "0:a?",
-    "-c:v", "libx264", "-preset", "superfast", "-crf", "22", "-r", "30", "-threads", "2", "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", out],
+  await run("ffmpeg", ["-y", "-loglevel", "error", "-reconnect", "1", ...inputs, "-filter_complex", fc, "-map", "[v]", "-map", media.length > 1 ? "1:a?" : "0:a?",
+    "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23", "-r", "30", "-threads", "2", "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", out],
     { timeout: 10 * 60e3 });
   return out;
 }

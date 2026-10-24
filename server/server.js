@@ -170,14 +170,16 @@ async function pump() {
   const { id, sourceUrl, tier } = running;
   try {
     await updateJob(id, { status: "processing", progress: "Starting" });
-    const { work, clips, title } = await clipStream(sourceUrl, tier, (msg) => updateJob(id, { progress: msg }).catch(() => {}));
     const results = [];
-    for (let i = 0; i < clips.length; i++) {
-      const c = clips[i];
-      await updateJob(id, { progress: `Saving clip ${i + 1} of ${clips.length}` }).catch(() => {});
-      const url = await uploadClip(c.file, `${id}/${String(i + 1).padStart(2, "0")}-${slug(c.title)}.mp4`);
-      results.push({ title: c.title, caption: c.caption, start: c.start, end: c.end, url });
-    }
+    const { work, title } = await clipStream(sourceUrl, tier,
+      (msg) => updateJob(id, { progress: msg }).catch(() => {}),
+      async (c, i) => {
+        // each clip goes live in the library as soon as it is cut
+        const url = await uploadClip(c.file, `${id}/${String(i + 1).padStart(2, "0")}-${slug(c.title)}.mp4`);
+        results.push({ title: c.title, caption: c.caption, start: c.start, end: c.end, url });
+        await fs.rm(c.file, { force: true }).catch(() => {});
+        await updateJob(id, { clips: results }).catch(() => {});
+      });
     await fs.rm(work, { recursive: true, force: true }).catch(() => {});
     await updateJob(id, { status: "done", progress: `${results.length} clips ready`, clips: results, source_title: title?.slice(0, 200) });
   } catch (e) {
