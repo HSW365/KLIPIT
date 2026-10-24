@@ -12,7 +12,8 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf";
 const HAS_FONT = existsSync(FONT);
 const WORK_ROOT = existsSync("/data") ? "/data/work" : os.tmpdir();
-const YTDLP = ["--no-playlist", "--no-warnings", "--socket-timeout", "30", "--retries", "5"];
+const YTDLP = ["--no-playlist", "--no-warnings", "--socket-timeout", "30", "--retries", "5",
+  ...(existsSync("/opt/bgutil/server/build") ? ["--extractor-args", "youtubepot-bgutilscript:server_home=/opt/bgutil/server"] : [])];
 
 export class ClipError extends Error {}
 
