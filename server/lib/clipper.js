@@ -218,12 +218,20 @@ async function mediaUrls(url, res) {
 async function renderClip(media, pick, tier, work, i) {
   const out = path.join(work, `clip_${i}.mp4`);
   const dur = pick.end - pick.start;
-  // A: read just the moment straight from the stream
+  // A: fetch only the stream pieces that cover the moment (HLS), or read it directly (progressive video)
   try {
-    const inputs = media.urls.flatMap((u) => ["-ss", String(pick.start), "-t", String(dur), "-i", u]);
+    const hls = media.urls[0].includes(".m3u8") || media.urls[0].includes("m3u8");
+    let inputs;
+    if (hls && media.urls.length === 1) {
+      const { file, offset } = await hlsCut(media.urls[0], pick.start, dur, path.join(work, `hls_${i}.ts`));
+      inputs = ["-ss", String(offset), "-t", String(dur), "-i", file];
+    } else {
+      inputs = media.urls.flatMap((u) => ["-ss", String(pick.start), "-t", String(dur), "-i", u]);
+    }
     await encode(inputs, media.urls.length > 1 ? "1:a?" : "0:a?", pick, tier, out);
+    await fs.rm(path.join(work, `hls_${i}.ts`), { force: true }).catch(() => {});
     if ((await seconds(out)) > dur * 0.6) return out;
-    console.error(`[clipper] clip ${i}: stream read came back short, retrying with a section download`);
+    console.error(`[clipper] clip ${i}: direct read came back short, retrying with a section download`);
   } catch (e) {
     console.error(`[clipper] clip ${i} direct read failed:`, lastLine(e.stderr || e.message));
   }
@@ -238,6 +246,40 @@ async function renderClip(media, pick, tier, work, i) {
   await fs.rm(seg, { force: true }).catch(() => {});
   if ((await seconds(out)) < dur * 0.6) throw new Error("clip came back empty");
   return out;
+}
+
+// Download just the HLS segments that cover [start, start+dur]. Returns the local file and where the moment starts in it.
+async function hlsCut(playlistUrl, start, dur, outFile) {
+  let url = playlistUrl;
+  let text = await (await fetch(url)).text();
+  if (text.includes("#EXT-X-STREAM-INF")) {
+    const v = text.split("\n").find((l) => l.trim() && !l.startsWith("#"));
+    url = new URL(v.trim(), url).href;
+    text = await (await fetch(url)).text();
+  }
+  const lines = text.split("\n").map((l) => l.trim());
+  const segs = []; let t = 0, d = 0, init = null;
+  for (const l of lines) {
+    if (l.startsWith("#EXT-X-MAP")) { const m = l.match(/URI="([^"]+)"/); if (m) init = new URL(m[1], url).href; }
+    else if (l.startsWith("#EXTINF:")) d = parseFloat(l.slice(8));
+    else if (l && !l.startsWith("#")) { segs.push({ uri: new URL(l, url).href, t0: t, t1: t + d }); t += d; d = 0; }
+  }
+  const need = segs.filter((g) => g.t1 > start && g.t0 < start + dur);
+  if (!need.length) throw new Error("moment is outside the stream");
+  const fh = await fs.open(outFile, "w");
+  try {
+    const get = async (u) => {
+      let r = await fetch(u);
+      if (!r.ok && /-unmuted\.ts/.test(u)) r = await fetch(u.replace("-unmuted.ts", "-muted.ts"));
+      if (!r.ok) throw new Error(`segment ${r.status}`);
+      return Buffer.from(await r.arrayBuffer());
+    };
+    if (init) await fh.write(await get(init));
+    for (const g of need) await fh.write(await get(g.uri));
+  } finally {
+    await fh.close();
+  }
+  return { file: outFile, offset: Math.max(0, start - need[0].t0) };
 }
 
 async function encode(inputs, audioMap, pick, tier, out) {
