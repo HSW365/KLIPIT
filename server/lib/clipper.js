@@ -117,7 +117,8 @@ async function audioHighlights(url, windowSec, count, work, onProgress) {
   onProgress("Listening to the stream");
   const { stdout: audioUrl } = await run("yt-dlp", [...YTDLP, "-f", "bestaudio/worst", "-g", url], { timeout: 90e3 });
   const src = audioUrl.trim().split("\n")[0];
-  const rms = await loudnessPerSecond(src, windowSec, (s) => onProgress(`Listening to the stream (${Math.min(99, Math.round((s / windowSec) * 100))}%)`));
+  const local = path.join(work, "audio.ogg");
+  const rms = await loudnessPerSecond(src, windowSec, local, (s) => onProgress(`Listening to the stream (${Math.min(99, Math.round((s / windowSec) * 100))}%)`));
   if (rms.length < 30) return [];
 
   // smooth over 3s, score against a rolling 2-minute baseline so loud games don't drown everything
@@ -125,19 +126,23 @@ async function audioHighlights(url, windowSec, count, work, onProgress) {
   const score = sm.map((v, i) => v - avg(sm.slice(Math.max(0, i - 60), i + 60)));
   const order = score.map((v, i) => [v, i]).sort((a, b) => b[0] - a[0]);
   const peaks = [];
-  const want = Math.min(count * 2, count + 12);
+  const want = count + Math.min(count, 8);
   for (const [, i] of order) {
     if (peaks.length >= want) break;
     if (peaks.every((p) => Math.abs(p - i) > 45)) peaks.push(i);
   }
   const cands = peaks.map((p) => ({ start: Math.max(0, p - 22), end: Math.min(rms.length, p + 13), peak: p, loud: +score[p].toFixed(1), text: "" }));
 
+  // transcribe the strongest spikes only, so long streams stay fast
+  const audio = existsSync(local) ? local : src;
+  const toHear = new Set([...cands.keys()].sort((a, b) => cands[b].loud - cands[a].loud).slice(0, Math.min(cands.length, 20)));
   onProgress("Transcribing the loudest moments");
   const wavs = [];
   for (let i = 0; i < cands.length; i++) {
+    if (!toHear.has(i)) { wavs.push(null); continue; }
     const f = path.join(work, `cand_${i}.wav`);
     try {
-      await run("ffmpeg", ["-y", "-loglevel", "error", "-ss", String(cands[i].start), "-t", String(cands[i].end - cands[i].start), "-i", src,
+      await run("ffmpeg", ["-y", "-loglevel", "error", "-ss", String(cands[i].start), "-t", String(cands[i].end - cands[i].start), "-i", audio,
         "-ac", "1", "-ar", "16000", f], { timeout: 120e3 });
       wavs.push(f);
     } catch {
@@ -158,11 +163,12 @@ async function audioHighlights(url, windowSec, count, work, onProgress) {
   return rankCandidates(cands, count);
 }
 
-function loudnessPerSecond(src, windowSec, onSec) {
+function loudnessPerSecond(src, windowSec, saveTo, onSec) {
   return new Promise((resolve, reject) => {
     const args = ["-hide_banner", "-nostats", "-t", String(windowSec), "-i", src, "-vn", "-ac", "1",
       "-af", "aresample=8000,asetnsamples=n=8000:p=0,astats=metadata=1:reset=1,ametadata=print:key=lavfi.astats.Overall.RMS_level:file=-",
-      "-f", "null", "-"];
+      "-f", "null", "-",
+      "-map", "0:a:0", "-ac", "1", "-ar", "16000", "-c:a", "libopus", "-b:a", "24k", "-y", saveTo];
     const p = spawn("ffmpeg", args);
     const vals = []; let buf = ""; let last = 0;
     p.stdout.on("data", (d) => {
@@ -198,21 +204,24 @@ async function renderClip(url, pick, tier, work, i) {
   const raw = path.join(work, `seg_${i}.mp4`);
   const out = path.join(work, `clip_${i}.mp4`);
   await run("yt-dlp", [...YTDLP, "-f", `bv*[height<=${tier.resolution}]+ba/b[height<=${tier.resolution}]/b`,
-    "--download-sections", `*${pick.start}-${pick.end}`, "--force-keyframes-at-cuts", "--merge-output-format", "mp4", "-o", raw, url],
+    "--download-sections", `*${Math.max(0, pick.start - 2)}-${pick.end + 2}`, "--merge-output-format", "mp4", "-o", raw, url],
     { timeout: 10 * 60e3 });
   const seg = existsSync(raw) ? raw : path.join(work, (await fs.readdir(work)).find((f) => f.startsWith(`seg_${i}.`)));
 
   const W = tier.resolution === 1080 ? 1080 : 720;
   const H = Math.round((W * 16) / 9);
   // Feed-ready vertical: blurred fill behind the full gameplay frame, so nothing important gets cropped off.
-  let fc = `[0:v]split[a][b];[a]scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},boxblur=24:2,eq=brightness=-0.12[bg];` +
+  // blur at quarter size then scale up: same look, a fraction of the CPU
+  let fc = `[0:v]split[a][b];[a]scale=${W / 4}:${H / 4}:force_original_aspect_ratio=increase,crop=${W / 4}:${H / 4},boxblur=6:2,eq=brightness=-0.12,scale=${W}:${H}[bg];` +
     `[b]scale=${W}:-2[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2`;
   if (tier.captions && pick.caption && HAS_FONT) fc += "," + drawtext(pick.caption, "y=h*0.16", Math.round(W / 17), 1, true);
   if (tier.watermark && HAS_FONT) fc += "," + drawtext("KLIPIT", "y=h*0.86", Math.round(W / 26), 0.7, false);
   fc += ",format=yuv420p[v]";
 
-  await run("ffmpeg", ["-y", "-loglevel", "error", "-i", seg, "-filter_complex", fc, "-map", "[v]", "-map", "0:a?",
-    "-c:v", "libx264", "-preset", "veryfast", "-crf", "21", "-r", "30", "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", out],
+  // the section download is cut on keyframes, so trim to the exact moment here
+  const lead = pick.start - Math.max(0, pick.start - 2);
+  await run("ffmpeg", ["-y", "-loglevel", "error", "-ss", String(lead), "-t", String(pick.end - pick.start), "-i", seg, "-filter_complex", fc, "-map", "[v]", "-map", "0:a?",
+    "-c:v", "libx264", "-preset", "superfast", "-crf", "22", "-r", "30", "-threads", "2", "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", out],
     { timeout: 10 * 60e3 });
   return out;
 }
