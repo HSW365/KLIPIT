@@ -131,11 +131,15 @@ async function audioHighlights(url, windowSec, count, work, onProgress) {
   // smooth over 3s, score against a rolling 2-minute baseline so loud games don't drown everything
   const sm = rms.map((_, i) => avg(rms.slice(Math.max(0, i - 1), i + 2)));
   const score = sm.map((v, i) => v - avg(sm.slice(Math.max(0, i - 60), i + 60)));
+  // skip the "starting soon" intro and the outro, where streams are usually not in the game yet
+  const intro = rms.length > 1800 ? Math.min(600, rms.length * 0.08) : 0;
+  const outro = rms.length > 1800 ? 180 : 0;
+  score.forEach((_, i) => { if (i < intro || i > rms.length - outro) score[i] = -Infinity; });
   const order = score.map((v, i) => [v, i]).sort((a, b) => b[0] - a[0]);
   const peaks = [];
   const want = count + Math.min(count, 8);
-  for (const [, i] of order) {
-    if (peaks.length >= want) break;
+  for (const [v, i] of order) {
+    if (peaks.length >= want || !Number.isFinite(v)) break;
     if (peaks.every((p) => Math.abs(p - i) > 45)) peaks.push(i);
   }
   const cands = peaks.map((p) => ({ start: Math.max(0, p - 22), end: Math.min(rms.length, p + 13), peak: p, loud: +score[p].toFixed(1), text: "" }));
@@ -288,7 +292,7 @@ async function encode(inputs, audioMap, pick, tier, out) {
   // Feed-ready vertical: the full gameplay frame over a blurred fill, so nothing important gets cropped off.
   // Blur is done at quarter size then scaled up: same look, a fraction of the CPU.
   let fc = `[0:v]fps=30,split[a][b];[a]scale=${W / 4}:${H / 4}:force_original_aspect_ratio=increase,crop=${W / 4}:${H / 4},boxblur=6:2,eq=brightness=-0.12,scale=${W}:${H}[bg];` +
-    `[b]scale=${W}:-2:flags=fast_bilinear[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2`;
+    `[b]scale=${Math.round(W * 1.28 / 2) * 2}:-2:flags=fast_bilinear,crop=${W}:ih[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2`;
   if (tier.captions && pick.caption && HAS_FONT) fc += "," + drawtext(pick.caption, "y=h*0.16", Math.round(W / 17), 1, true);
   if (tier.watermark && HAS_FONT) fc += "," + drawtext("KLIPIT", "y=h*0.86", Math.round(W / 26), 0.7, false);
   fc += ",format=yuv420p[v]";
