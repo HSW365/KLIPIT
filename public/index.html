@@ -96,7 +96,7 @@ input:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px rgba(34,21
 .modal-x{position:absolute;right:14px;top:10px}.modal-x button{background:none;border:0;color:var(--mut);font-size:30px;cursor:pointer}
 .toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,30px);opacity:0;background:#fff;color:#0a0a0f;font-weight:600;padding:12px 18px;border-radius:6px;transition:.25s;z-index:99;pointer-events:none}
 .toast.on{opacity:1;transform:translate(-50%,0)}
-.btn[disabled]{opacity:.55;cursor:wait}
+body.signed .sticky{display:none}.btn[disabled]{opacity:.55;cursor:wait}
 @media (max-width:860px){.gate{grid-template-columns:1fr}.gate-side{border-left:0;border-top:1px solid var(--line);padding:24px 0 0}.gate-form{grid-template-columns:1fr}.paste{grid-template-columns:1fr}.app-actions{width:100%}.app-actions .btn{flex:1}.nav-acct{display:none}}
 
 </style>
@@ -117,7 +117,7 @@ input:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px rgba(34,21
       <button class="menu-btn" type="button" aria-label="Menu" aria-expanded="false"><span></span></button>
     </div>
   </div>
-  <nav class="mnav" aria-label="Menu"><a href="#how">How it works</a><a href="#pricing">Plans</a><a href="#clip">Clip a stream</a><a href="#faq">Questions</a><a class="btn btn-acc" href="#pricing" >See plans</a></nav>
+  <nav class="mnav" aria-label="Menu"><a href="#how">How it works</a><a href="#pricing">Plans</a><a href="#clip">Clip a stream</a><a href="#faq">Questions</a><a href="#clip" data-acct>Sign in</a><a class="btn btn-acc" href="#pricing" >See plans</a></nav>
 </header>
 <main id="main">
 <section class="hero" id="top">
@@ -172,7 +172,7 @@ input:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px rgba(34,21
       </div>
       <form class="paste" id="paste" novalidate>
         <label class="sr" for="url">Stream link</label>
-        <input id="url" type="url" autocapitalize="none" spellcheck="false" placeholder="Paste a YouTube, Twitch or Kick VOD link">
+        <input id="url" type="url" autocapitalize="none" spellcheck="false" placeholder="Paste a stream link">
         <button id="go" class="btn btn-acc" type="submit">Clip it</button>
       </form>
       <p class="form-msg" id="paste-msg" role="alert"></p>

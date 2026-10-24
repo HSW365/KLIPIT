@@ -138,6 +138,7 @@ async function loadMe() {
 function render() {
   const signed = !!(token && me);
   $("#gate").hidden = signed; $("#app").hidden = !signed;
+  document.body.classList.toggle("signed", signed);
   $$("[data-acct]").forEach((a) => (a.textContent = signed ? "My clips" : "Sign in"));
   if (!signed) return;
   const p = me.plan;
