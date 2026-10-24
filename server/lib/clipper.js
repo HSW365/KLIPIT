@@ -14,6 +14,12 @@ const HAS_FONT = existsSync(FONT);
 const WORK_ROOT = existsSync("/data") ? "/data/work" : os.tmpdir();
 const YTDLP = ["--no-playlist", "--no-warnings", "--socket-timeout", "30", "--retries", "5",
   ...(existsSync("/opt/bgutil/server/build") ? ["--extractor-args", "youtubepot-bgutilscript:server_home=/opt/bgutil/server"] : [])];
+// Optional: YouTube cookies (Netscape format) in YT_COOKIES lets YouTube links work from the server.
+const COOKIES = path.join(os.tmpdir(), "yt-cookies.txt");
+if (process.env.YT_COOKIES) {
+  (await import("node:fs")).writeFileSync(COOKIES, process.env.YT_COOKIES.replace(/\\n/g, "\n"));
+  YTDLP.push("--cookies", COOKIES);
+}
 
 export class ClipError extends Error {}
 
@@ -23,6 +29,7 @@ export async function clipStream(sourceUrl, tier, onProgress = () => {}) {
   const work = await fs.mkdtemp(path.join(WORK_ROOT, "klipit-"));
   try {
     onProgress("Reading the stream");
+    sourceUrl = await resolveChannel(sourceUrl, onProgress);
     const info = await probe(sourceUrl);
     if (info.isLive) throw new ClipError("That stream is still live. Paste the link again once it ends and the VOD is up.");
     const window = Math.min(tier.maxMinutes * 60, info.duration || tier.maxMinutes * 60);
@@ -57,13 +64,28 @@ export async function clipStream(sourceUrl, tier, onProgress = () => {}) {
   }
 }
 
+// A Twitch channel link (twitch.tv/name) means "their most recent broadcast".
+async function resolveChannel(url, onProgress) {
+  const m = url.match(/^https?:\/\/(?:www\.|m\.)?twitch\.tv\/([a-z0-9_]{3,25})\/?(?:\?.*)?$/i);
+  if (!m || ["videos", "directory", "search", "settings"].includes(m[1].toLowerCase())) return url;
+  onProgress(`Finding ${m[1]}'s latest broadcast`);
+  try {
+    const { stdout } = await run("yt-dlp", ["--no-warnings", "--flat-playlist", "--playlist-items", "1", "--print", "url",
+      `https://www.twitch.tv/${m[1]}/videos?filter=archives&sort=time`], { timeout: 90e3 });
+    const vod = stdout.trim().split("\n").find((l) => /twitch\.tv\/videos\/\d+/.test(l));
+    if (vod) return vod.trim();
+  } catch {}
+  throw new ClipError(`${m[1]} has no past broadcasts saved on Twitch. Paste a VOD link instead.`);
+}
+
 async function probe(url) {
   try {
     const { stdout } = await run("yt-dlp", [...YTDLP, "--skip-download", "--print", "%(title)s\t%(duration)s\t%(is_live)s", url], { maxBuffer: 1 << 20, timeout: 90e3 });
     const [title, dur, live] = stdout.trim().split("\n").pop().split("\t");
     return { title: title || "Stream", duration: Number(dur) || 0, isLive: live === "True" };
   } catch (e) {
-    const msg = firstLine(e.stderr || e.message);
+    const msg = String(e.stderr || e.message).split("\n").filter((l) => /ERROR/.test(l)).pop() || firstLine(e.stderr || e.message);
+    console.error("[probe]", url, msg);
     if (/sign in|bot/i.test(msg)) throw new ClipError("YouTube blocked the request for this video. Try the Twitch or Kick VOD of the same stream.");
     if (/unsupported url/i.test(msg)) throw new ClipError("That link is not a YouTube, Twitch or Kick video.");
     throw new ClipError(`Could not open that link. ${msg.replace(/^ERROR:\s*/, "")}`);
