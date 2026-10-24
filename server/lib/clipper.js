@@ -70,11 +70,19 @@ async function resolveChannel(url, onProgress) {
   if (!m || ["videos", "directory", "search", "settings"].includes(m[1].toLowerCase())) return url;
   onProgress(`Finding ${m[1]}'s latest broadcast`);
   try {
-    const { stdout } = await run("yt-dlp", ["--no-warnings", "--flat-playlist", "--playlist-items", "1", "--print", "url",
-      `https://www.twitch.tv/${m[1]}/videos?filter=archives&sort=time`], { timeout: 90e3 });
-    const vod = stdout.trim().split("\n").find((l) => /twitch\.tv\/videos\/\d+/.test(l));
-    if (vod) return vod.trim();
-  } catch {}
+    const r = await fetch("https://gql.twitch.tv/gql", {
+      method: "POST",
+      headers: { "Client-ID": "kimne78kx3ncx6brgo4mv6wki5h1ko", "Content-Type": "application/json" },
+      body: JSON.stringify({ query: `query{user(login:${JSON.stringify(m[1].toLowerCase())}){videos(first:1,type:ARCHIVE,sort:TIME){edges{node{id}}}}}` }),
+    });
+    const j = await r.json();
+    const id = j?.data?.user?.videos?.edges?.[0]?.node?.id;
+    if (id) return `https://www.twitch.tv/videos/${id}`;
+    if (j?.data && !j.data.user) throw new ClipError(`There is no Twitch channel called ${m[1]}.`);
+  } catch (e) {
+    if (e instanceof ClipError) throw e;
+    console.error("[resolve]", m[1], e.message);
+  }
   throw new ClipError(`${m[1]} has no past broadcasts saved on Twitch. Paste a VOD link instead.`);
 }
 
