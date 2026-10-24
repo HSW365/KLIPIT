@@ -73,10 +73,10 @@ async function resolveChannel(url, onProgress) {
     const r = await fetch("https://gql.twitch.tv/gql", {
       method: "POST",
       headers: { "Client-ID": "kimne78kx3ncx6brgo4mv6wki5h1ko", "Content-Type": "application/json" },
-      body: JSON.stringify({ query: `query{user(login:${JSON.stringify(m[1].toLowerCase())}){videos(first:1,type:ARCHIVE,sort:TIME){edges{node{id}}}}}` }),
+      body: JSON.stringify({ query: `query{user(login:${JSON.stringify(m[1].toLowerCase())}){videos(first:3,type:ARCHIVE,sort:TIME){edges{node{id status}}}}}` }),
     });
     const j = await r.json();
-    const id = j?.data?.user?.videos?.edges?.[0]?.node?.id;
+    const id = j?.data?.user?.videos?.edges?.map((e) => e.node).find((n) => n.status !== "RECORDING")?.id;
     if (id) return `https://www.twitch.tv/videos/${id}`;
     if (j?.data && !j.data.user) throw new ClipError(`There is no Twitch channel called ${m[1]}.`);
   } catch (e) {
