@@ -69,7 +69,7 @@ let tiers = [];
       </div>`).join("");
     $$("button[data-tier]", el).forEach((b) => b.addEventListener("click", () => openBuy(b.dataset.tier)));
     // QR / ad links land straight on sign up: ?signup or ?signup=starter|pro|elite
-    const want = new URLSearchParams(location.search).get("signup");
+    const want = new URLSearchParams(location.search).get("signup") ?? (/^#(signup|join)$/.test(location.hash) ? "" : null);
     if (want !== null) {
       history.replaceState(null, "", location.pathname + "#pricing");
       openBuy(tiers.some((x) => x.key === want) ? want : "pro");
