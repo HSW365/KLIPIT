@@ -68,6 +68,12 @@ let tiers = [];
         <button class="btn ${i === 1 ? "btn-primary" : "btn-ghost"}" type="button" data-tier="${t.key}">Choose ${esc(t.name)}</button>
       </div>`).join("");
     $$("button[data-tier]", el).forEach((b) => b.addEventListener("click", () => openBuy(b.dataset.tier)));
+    // QR / ad links land straight on sign up: ?signup or ?signup=starter|pro|elite
+    const want = new URLSearchParams(location.search).get("signup");
+    if (want !== null) {
+      history.replaceState(null, "", location.pathname + "#pricing");
+      openBuy(tiers.some((x) => x.key === want) ? want : "pro");
+    }
   } catch {
     el.innerHTML = '<div class="loading">Plans did not load. Refresh the page, or email hsw365media@gmail.com.</div>';
   }
@@ -78,6 +84,13 @@ function openBuy(key) {
   buyTier = key;
   const t = tiers.find((x) => x.key === key);
   $("#buy-plan").textContent = `${t.name} · $${t.priceUsd} a month`;
+  $("#buy-pick").innerHTML = tiers.map((x) => `<button type="button" role="radio" aria-checked="${x.key === key}" data-pick="${x.key}"><b>$${x.priceUsd}</b><span>${esc(x.name)} · ${x.clipsPerStream} clips</span></button>`).join("");
+  $$("button[data-pick]", $("#buy-pick")).forEach((b) => b.addEventListener("click", () => {
+    buyTier = b.dataset.pick;
+    const n = tiers.find((x) => x.key === buyTier);
+    $("#buy-plan").textContent = `${n.name} · $${n.priceUsd} a month`;
+    $$("button[data-pick]", $("#buy-pick")).forEach((o) => o.setAttribute("aria-checked", String(o === b)));
+  }));
   msg($("#buy-msg"), "");
   if (me?.email) $("#buy-email").value = me.email;
   const d = $("#buy");

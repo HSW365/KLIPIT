@@ -93,6 +93,7 @@ input:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px rgba(34,21
 .modal::backdrop{background:rgba(5,5,8,.78);backdrop-filter:blur(4px)}
 .modal h3{font-size:36px;margin-top:6px}.modal-p{color:var(--text2);margin-top:10px}
 .modal-k{font-family:var(--mono);font-size:13px;color:var(--acc);text-transform:uppercase;letter-spacing:.08em}
+.pick{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:18px}.pick button{min-height:64px;background:transparent;border:1px solid var(--line2);border-radius:6px;color:var(--text);cursor:pointer;font:inherit;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:8px}.pick button b{font-family:var(--disp);font-size:22px;color:#fff}.pick button span{font-size:12px;color:var(--mut)}.pick button[aria-checked=true]{border-color:var(--acc);background:rgba(255,255,255,.04)}.pick button[aria-checked=true] span{color:var(--acc)}
 .modal-x{position:absolute;right:14px;top:10px}.modal-x button{background:none;border:0;color:var(--mut);font-size:30px;cursor:pointer}
 .toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,30px);opacity:0;background:#fff;color:#0a0a0f;font-weight:600;padding:12px 18px;border-radius:6px;transition:.25s;z-index:99;pointer-events:none}
 .toast.on{opacity:1;transform:translate(-50%,0)}
@@ -202,6 +203,7 @@ body.signed .sticky{display:none}.btn[disabled]{opacity:.55;cursor:wait}
   <p class="modal-k" id="buy-plan">Plan</p>
   <h3>Where should we send your receipt?</h3>
   <p class="modal-p">This email is your login. Next you pay securely on Stripe, then you land back here signed in.</p>
+  <div class="pick" id="buy-pick" role="radiogroup" aria-label="Plan"></div>
   <form id="buy-form" novalidate>
     <label class="field"><span>Email</span><input id="buy-email" type="email" autocomplete="email" placeholder="you@email.com" required></label>
     <button class="btn btn-acc" type="submit" style="width:100%;margin-top:14px">Continue to secure checkout</button>
@@ -211,6 +213,6 @@ body.signed .sticky{display:none}.btn[disabled]{opacity:.55;cursor:wait}
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <div class="sticky"><a class="btn btn-acc" href="#pricing" >See plans</a></div>
 <script src="hsw/hsw.js"></script>
-<script src="/app.js?v=2"></script>
+<script src="/app.js?v=3"></script>
 </body>
 </html>
