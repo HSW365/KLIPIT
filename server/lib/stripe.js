@@ -22,6 +22,7 @@ export async function createCheckoutSession(tierKey, email) {
 
   return stripeClient().checkout.sessions.create({
     mode: "subscription",
+    subscription_data: { trial_period_days: 3 },
     line_items: [{ price: priceId, quantity: 1 }],
     customer_email: email || undefined,
     allow_promotion_codes: true,
