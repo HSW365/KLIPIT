@@ -36,7 +36,12 @@ export async function upsertSubscriber({ email, stripeCustomerId, tier, status, 
   return data;
 }
 
+const OWNER_EMAILS = ["hsw365media@gmail.com", "hoodstarent365@gmail.com"];
+
 export async function getSubscriberByEmail(email) {
+  // HSW365 owner emails always get Elite, free, forever (isComp() treats "comp_" as owner, no billing).
+  if (OWNER_EMAILS.includes(String(email || "").toLowerCase().trim()))
+    return { email: String(email).toLowerCase().trim(), tier: "elite", status: "active", stripe_customer_id: "comp_owner", current_period_end: null };
   // One email can have more than one row (comp + Stripe, or several Stripe customers). Prefer the
   // best active row: real Stripe customer first, then comp, newest first.
   const { data, error } = await supaClient()
