@@ -30,7 +30,13 @@ export async function clipStream(sourceUrl, tier, onProgress = () => {}, onClip 
   try {
     onProgress("Reading the stream");
     sourceUrl = await resolveChannel(sourceUrl, onProgress);
+    let kickTitle = null;
+    if (isKick(sourceUrl)) {
+      const k = await resolveKick(sourceUrl, onProgress);
+      sourceUrl = k.url; kickTitle = k.title;
+    }
     const info = await probe(sourceUrl);
+    if (kickTitle) info.title = kickTitle;
     if (info.isLive) throw new ClipError("That stream is still live. Paste the link again once it ends and the VOD is up.");
     const window = Math.min(tier.maxMinutes * 60, info.duration || tier.maxMinutes * 60);
 
@@ -69,6 +75,46 @@ export async function clipStream(sourceUrl, tier, onProgress = () => {}, onClip 
     await fs.rm(work, { recursive: true, force: true }).catch(() => {});
     throw e;
   }
+}
+
+// Kick: yt-dlp's Kick extractor is blocked from datacenter IPs, but the public API hands out the raw HLS playlist,
+// which ffmpeg/yt-dlp read directly. Accepts a VOD link, a channel link (latest VOD) or a direct playlist link.
+const KICK_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
+const isKick = (u) => /^https?:\/\/([a-z0-9-]+\.)*kick\.com\//i.test(u);
+async function kickJson(u) {
+  let last;
+  for (let i = 0; i < 3; i++) {
+    try {
+      const r = await fetch(u, { headers: { "User-Agent": KICK_UA, Accept: "application/json", Referer: "https://kick.com/" }, signal: AbortSignal.timeout(20e3) });
+      if (r.ok) return await r.json();
+      last = `HTTP ${r.status}`;
+    } catch (e) { last = e.message; }
+    await new Promise((r) => setTimeout(r, 1500 * (i + 1)));
+  }
+  throw new Error(last || "unreachable");
+}
+async function resolveKick(url, onProgress) {
+  const uuid = url.match(/\/videos?\/([0-9a-f-]{36})/i)?.[1];
+  const slug = url.match(/^https?:\/\/(?:www\.)?kick\.com\/([a-z0-9_-]+)\/?(?:\?.*)?$/i)?.[1];
+  try {
+    if (uuid) {
+      const v = await kickJson(`https://kick.com/api/v1/video/${uuid}`);
+      if (!v?.source) throw new Error("no playlist");
+      return { url: v.source, title: v.livestream?.session_title || null };
+    }
+    if (slug && !["videos", "categories", "search"].includes(slug.toLowerCase())) {
+      onProgress(`Finding ${slug}'s latest broadcast`);
+      const list = await kickJson(`https://kick.com/api/v2/channels/${slug.toLowerCase()}/videos`);
+      const v = (Array.isArray(list) ? list : []).find((x) => x.source && !x.is_live && (x.duration || 0) > 10 * 60e3);
+      if (!v) throw new ClipError(`${slug} has no past broadcasts saved on Kick. Paste a VOD link instead.`);
+      return { url: v.source, title: v.session_title || null };
+    }
+  } catch (e) {
+    if (e instanceof ClipError) throw e;
+    console.error("[kick]", url, e.message);
+    throw new ClipError("Could not reach that Kick video right now. Try again in a minute.");
+  }
+  return { url, title: null }; // direct stream.kick.com playlist
 }
 
 // A Twitch channel link (twitch.tv/name) means "their most recent broadcast".
