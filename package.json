@@ -1,6 +1,7 @@
 {
   "name": "klipit",
   "version": "1.0.0",
+  "license": "UNLICENSED",
   "description": "Klipit by HSW365 — paste a GTA6 stream link, get subscription-gated clips. Claude API + Stripe only.",
   "type": "module",
   "engines": { "node": ">=20" },
