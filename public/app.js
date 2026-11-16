@@ -1,13 +1,13 @@
-/* Klipit web app: plans + checkout, sign in, clip a stream, clip library, billing. */
+/* Klipit web app: paste any link, plans + checkout, sign in, clip library, billing. */
+import { normalizeSource } from "/links.js";
+
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
-const KEY = "klipit.token";
-const store = {
-  get: () => { try { return localStorage.getItem(KEY); } catch { return null; } },
-  set: (v) => { try { localStorage.setItem(KEY, v); } catch {} },
-  clear: () => { try { localStorage.removeItem(KEY); } catch {} },
-};
-let token = store.get();
+const KEY = "klipit.token", PEND = "klipit.pending";
+const lsGet = (k, st = localStorage) => { try { return st.getItem(k); } catch { return null; } };
+const lsSet = (k, v, st = localStorage) => { try { st.setItem(k, v); } catch {} };
+const lsDel = (k, st = localStorage) => { try { st.removeItem(k); } catch {} };
+let token = lsGet(KEY);
 let me = null;
 let pollTimer = null;
 
@@ -36,19 +36,85 @@ const ago = (iso) => {
   if (s < 60) return "just now"; if (s < 3600) return `${Math.floor(s / 60)}m ago`;
   if (s < 86400) return `${Math.floor(s / 3600)}h ago`; return new Date(iso).toLocaleDateString();
 };
-function toast(msg) {
-  const t = $("#toast"); t.textContent = msg; t.classList.add("on");
-  clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("on"), 2600);
+function toast(m) {
+  const t = $("#toast"); t.textContent = m; t.classList.add("on");
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("on"), 2800);
 }
 function busy(btn, on, label) {
   if (!btn) return;
   if (on) { btn.dataset.l = btn.textContent; btn.textContent = label || "Working"; btn.disabled = true; }
   else { btn.textContent = btn.dataset.l || btn.textContent; btn.disabled = false; }
 }
-const msg = (el, text, ok) => { el.textContent = text || ""; el.classList.toggle("ok", !!ok); };
+const msg = (el, text) => { el.textContent = text || ""; };
+const openDialog = (d) => { if (d.showModal) { if (!d.open) d.showModal(); } else d.setAttribute("open", ""); };
+const closeDialog = (d) => { if (d.close) d.close(); else d.removeAttribute("open"); };
+
+// ---------- dialogs ----------
+$$("dialog").forEach((d) => d.addEventListener("click", (e) => { if (e.target === d || e.target.closest("[data-close]")) closeDialog(d); }));
+$$("[data-open=auth]").forEach((b) => b.addEventListener("click", () => openAuth()));
+function openAuth(note) {
+  $("#auth-note").textContent = note || "Use the email on your plan and the last 4 digits of the card it bills.";
+  msg($("#si-msg"), "");
+  openDialog($("#auth"));
+  setTimeout(() => $("#si-email").focus(), 60);
+}
+// "Sign in" links open the dialog when signed out; "My clips" just scrolls.
+$$("[data-acct]").forEach((a) => a.closest("a")?.addEventListener("click", (e) => {
+  if (!(token && me)) { e.preventDefault(); openAuth(); }
+}));
+
+// ---------- paste box ----------
+const url = $("#url"), say = $("#say"), SAY_DEFAULT = say.textContent;
+function setSay(text, kind) { say.textContent = text; say.className = "say" + (kind ? " " + kind : ""); }
+function detect() {
+  const v = url.value.trim();
+  const r = v ? normalizeSource(v) : null;
+  $$(".chip").forEach((c) => c.classList.toggle("on", !!(r?.ok && c.dataset.p === r.platform)));
+  if (!v) setSay(SAY_DEFAULT);
+  else if (r.ok) setSay(`Looks good. ${{ youtube: "YouTube", twitch: "Twitch", kick: "Kick" }[r.platform]} link ready.`, "ok");
+  else setSay(r.error, v.length > 12 ? "err" : "");
+  return r;
+}
+url.addEventListener("input", detect);
+url.addEventListener("paste", () => setTimeout(detect, 0));
+$("#pastebtn").addEventListener("click", async () => {
+  try {
+    const t = await navigator.clipboard.readText();
+    if (!t.trim()) return toast("Nothing copied yet. Copy a stream link first.");
+    url.value = t.trim(); detect(); url.focus();
+  } catch { url.focus(); toast("Long-press or press Ctrl+V to paste into the box."); }
+});
+
+$("#paste").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const r = detect();
+  if (!url.value.trim()) { url.focus(); return setSay("Paste a stream link first.", "err"); }
+  if (!r.ok) return setSay(r.error, "err");
+  if (!(token && me)) {
+    lsSet(PEND, r.url, sessionStorage);
+    setSay("Sign in or pick a plan and Klipit starts on this link.", "ok");
+    return openAuth("Sign in and Klipit starts clipping your link right away.");
+  }
+  if (!me.plan) { lsSet(PEND, r.url, sessionStorage); toast("Pick a plan to start clipping. Your link is saved."); return $("#pricing").scrollIntoView(); }
+  await startClip(r.url);
+});
+
+async function startClip(sourceUrl) {
+  const go = $("#go");
+  busy(go, true, "Starting");
+  try {
+    await api("/api/clip", { method: "POST", body: { sourceUrl } });
+    url.value = ""; $$(".chip").forEach((c) => c.classList.remove("on"));
+    setSay("Got it. Klipit is on it. Watch your clips below, or leave and come back.", "ok");
+    await loadMe();
+    $("#library").scrollIntoView();
+  } catch (err) {
+    setSay(err.message, "err");
+  } finally { busy(go, false); }
+}
 
 // ---------- plans + checkout ----------
-let tiers = [];
+let tiers = [], buyTier = null;
 (async function loadTiers() {
   const el = $("#tiers");
   try {
@@ -65,7 +131,7 @@ let tiers = [];
           <li>${t.captions ? "Hook caption burned in" : "Clean cuts, no caption"}</li>
           <li>${t.watermark ? "Klipit watermark" : "No watermark"}</li>
         </ul>
-        <button class="btn ${i === 1 ? "btn-primary" : "btn-ghost"}" type="button" data-tier="${t.key}">Choose ${esc(t.name)}</button>
+        <button class="btn ${i === 1 ? "btn-sun" : "btn-ghost"}" type="button" data-tier="${t.key}">Choose ${esc(t.name)}</button>
       </div>`).join("");
     $$("button[data-tier]", el).forEach((b) => b.addEventListener("click", () => openBuy(b.dataset.tier)));
     // QR / ad links land straight on sign up: ?signup or ?signup=starter|pro|elite
@@ -75,29 +141,22 @@ let tiers = [];
       openBuy(tiers.some((x) => x.key === want) ? want : "pro");
     }
   } catch {
-    el.innerHTML = '<div class="loading">Plans did not load. Refresh the page, or email hsw365media@gmail.com.</div>';
+    el.innerHTML = '<p class="lede">Plans did not load. Refresh the page, or email hsw365media@gmail.com.</p>';
   }
 })();
 
-let buyTier = null;
-function openBuy(key) {
-  buyTier = key;
-  const t = tiers.find((x) => x.key === key);
+function paintBuy() {
+  const t = tiers.find((x) => x.key === buyTier);
   $("#buy-plan").textContent = `${t.name} · $${t.priceUsd} a month`;
-  $("#buy-pick").innerHTML = tiers.map((x) => `<button type="button" role="radio" aria-checked="${x.key === key}" data-pick="${x.key}"><b>$${x.priceUsd}</b><span>${esc(x.name)} · ${x.clipsPerStream} clips</span></button>`).join("");
-  $$("button[data-pick]", $("#buy-pick")).forEach((b) => b.addEventListener("click", () => {
-    buyTier = b.dataset.pick;
-    const n = tiers.find((x) => x.key === buyTier);
-    $("#buy-plan").textContent = `${n.name} · $${n.priceUsd} a month`;
-    $$("button[data-pick]", $("#buy-pick")).forEach((o) => o.setAttribute("aria-checked", String(o === b)));
-  }));
-  msg($("#buy-msg"), "");
-  if (me?.email) $("#buy-email").value = me.email;
-  const d = $("#buy");
-  if (d.showModal) d.showModal(); else d.setAttribute("open", "");
-  setTimeout(() => $("#buy-email").focus(), 50);
+  $("#buy-pick").innerHTML = tiers.map((x) => `<button type="button" role="radio" aria-checked="${x.key === buyTier}" data-pick="${x.key}"><b>$${x.priceUsd}</b><span>${esc(x.name)} · ${x.clipsPerStream} clips</span></button>`).join("");
+  $$("button[data-pick]", $("#buy-pick")).forEach((b) => b.addEventListener("click", () => { buyTier = b.dataset.pick; paintBuy(); }));
 }
-$("#buy").addEventListener("click", (e) => { if (e.target.id === "buy") e.target.close(); });
+function openBuy(key) {
+  buyTier = key; paintBuy(); msg($("#buy-msg"), "");
+  if (me?.email) $("#buy-email").value = me.email;
+  openDialog($("#buy"));
+  setTimeout(() => $("#buy-email").focus(), 60);
+}
 $("#buy-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const email = $("#buy-email").value.trim();
@@ -105,11 +164,9 @@ $("#buy-form").addEventListener("submit", async (e) => {
   const btn = $("button[type=submit]", e.target);
   busy(btn, true, "Opening checkout");
   try {
-    const { url } = await api("/api/checkout", { method: "POST", body: { tier: buyTier, email } });
-    location.href = url;
-  } catch (err) {
-    busy(btn, false); msg($("#buy-msg"), err.message);
-  }
+    const { url: to } = await api("/api/checkout", { method: "POST", body: { tier: buyTier, email } });
+    location.href = to;
+  } catch (err) { busy(btn, false); msg($("#buy-msg"), err.message); }
 });
 
 // ---------- auth ----------
@@ -121,25 +178,34 @@ $("#signin").addEventListener("submit", async (e) => {
   busy(btn, true, "Signing in");
   try {
     const r = await api("/api/auth/signin", { method: "POST", body: { email, proof } });
-    token = r.token; store.set(token); $("#si-proof").value = "";
+    token = r.token; lsSet(KEY, token); $("#si-proof").value = "";
+    closeDialog($("#auth"));
     await loadMe(); toast("Signed in");
-  } catch (err) {
-    msg($("#si-msg"), err.message);
-  } finally { busy(btn, false); }
+    resumePending();
+  } catch (err) { msg($("#si-msg"), err.message); }
+  finally { busy(btn, false); }
 });
 
 function signOut(expired) {
-  token = null; me = null; store.clear(); clearTimeout(pollTimer);
+  token = null; me = null; lsDel(KEY); clearTimeout(pollTimer);
   render();
-  if (expired) msg($("#si-msg"), "Your session ended. Sign in again.");
+  if (expired) openAuth("Your session ended. Sign in again.");
 }
 $("#signout").addEventListener("click", () => { signOut(); toast("Signed out"); });
-
 $("#billing").addEventListener("click", async (e) => {
   busy(e.currentTarget, true, "Opening");
   try { location.href = (await api("/api/portal", { method: "POST" })).url; }
   catch (err) { toast(err.message); busy(e.currentTarget, false); }
 });
+
+// A link pasted before sign-in is saved, then started once the person is in.
+function resumePending() {
+  const p = lsGet(PEND, sessionStorage);
+  if (!p || !(token && me)) return;
+  lsDel(PEND, sessionStorage);
+  url.value = p; detect();
+  if (me.plan) startClip(p); else { toast("Pick a plan to start. Your link is saved."); $("#pricing").scrollIntoView(); lsSet(PEND, p, sessionStorage); }
+}
 
 // ---------- account + library ----------
 async function loadMe() {
@@ -151,7 +217,6 @@ async function loadMe() {
 function render() {
   const signed = !!(token && me);
   $("#gate").hidden = signed; $("#app").hidden = !signed;
-  document.body.classList.toggle("signed", signed);
   $$("[data-acct]").forEach((a) => (a.textContent = signed ? "My clips" : "Sign in"));
   if (!signed) return;
   const p = me.plan;
@@ -161,26 +226,20 @@ function render() {
   $("#billing").hidden = !p || p.owner;
   $("#plan-note").textContent = p
     ? `Your plan: ${p.clipsPerStream} clips per stream, scans up to ${p.maxMinutes >= 60 ? p.maxMinutes / 60 + " hours" : p.maxMinutes + " minutes"}, ${p.resolution}p.`
-    : "Your plan is not active. Pick a plan below to keep clipping.";
-  $("#go").disabled = !p;
+    : "Your plan is not active. Pick a plan to keep clipping.";
   renderJobs(me.jobs || []);
   if ((me.jobs || []).some((j) => j.status === "queued" || j.status === "processing")) schedulePoll();
 }
 
 function renderJobs(jobs) {
   const box = $("#jobs");
-  if (!jobs.length) {
-    box.innerHTML = '<div class="empty">Your clips show up here. Paste a stream link above to start.</div>';
-    return;
-  }
-  // keep any playing video untouched: only re-render cards whose content changed
-  const html = jobs.map(jobCard);
+  if (!jobs.length) { box.innerHTML = '<div class="empty">Your clips show up here. Paste a stream link at the top to start.</div>'; return; }
   const existing = new Map($$(".job", box).map((n) => [n.dataset.id, n]));
   const frag = document.createDocumentFragment();
-  jobs.forEach((j, i) => {
+  jobs.forEach((j) => {
     const old = existing.get(j.id);
     if (old && old.dataset.sig === sig(j)) frag.appendChild(old);
-    else { const t = document.createElement("template"); t.innerHTML = html[i].trim(); frag.appendChild(t.content.firstChild); }
+    else { const t = document.createElement("template"); t.innerHTML = jobCard(j).trim(); frag.appendChild(t.content.firstChild); }
   });
   box.replaceChildren(frag);
 }
@@ -194,14 +253,11 @@ function jobCard(j) {
   if (live) {
     const where = j.status === "queued" && j.position > 1 ? `Number ${j.position} in line. ` : "";
     body = `<div class="bar"><i></i></div><p class="job-msg">${esc(where + (j.progress || "Waiting to start"))}</p>` + gallery(j);
-  } else if (j.status === "failed") {
-    body = `<p class="job-msg err">${esc(j.error || "This one did not finish.")}</p>` + gallery(j);
-  } else {
-    body = gallery(j);
-  }
-  return `<article class="job" data-id="${j.id}" data-sig="${esc(sig(j))}">
+  } else if (j.status === "failed") body = `<p class="job-msg err">${esc(j.error || "This one did not finish.")}</p>` + gallery(j);
+  else body = gallery(j);
+  return `<article class="job" data-id="${esc(j.id)}" data-sig="${esc(sig(j))}">
     <div class="job-head"><div><b>${esc(title)}</b><span>${ago(j.created_at)}${(j.clips || []).length ? ` · ${(j.clips || []).length} clips` : ""}</span></div>
-    <span class="state ${j.status}">${label}</span></div>${body}</article>`;
+    <span class="state ${esc(j.status)}">${label}</span></div>${body}</article>`;
 }
 function gallery(j) {
   if (!(j.clips || []).length) return "";
@@ -209,8 +265,8 @@ function gallery(j) {
       <div class="kc">
         <video src="${esc(c.url)}#t=0.5" preload="metadata" controls playsinline></video>
         <div class="kc-b"><b>${esc(c.title)}</b><span>${clock(c.start)} to ${clock(c.end)}</span>
-          <div class="kc-a"><a class="btn btn-acc" href="${esc(c.url)}" download="${esc(fileName(c.title, k))}">Download</a>
-          <button class="btn btn-line" type="button" data-copy="${esc(c.caption || c.title)}">Copy caption</button></div>
+          <div class="kc-a"><a class="btn btn-sun" href="${esc(c.url)}" download="${esc(fileName(c.title, k))}">Download</a>
+          <button class="btn btn-ghost" type="button" data-copy="${esc(c.caption || c.title)}">Caption</button></div>
         </div>
       </div>`).join("")}</div>`;
 }
@@ -234,37 +290,30 @@ function schedulePoll() {
   }, 4000);
 }
 
-$("#paste").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const sourceUrl = $("#url").value.trim();
-  const m = $("#paste-msg"); msg(m, "");
-  if (!/^https?:\/\/([a-z0-9-]+\.)*(youtube\.com|youtu\.be|twitch\.tv|kick\.com)\//i.test(sourceUrl))
-    return msg(m, "Paste a full YouTube, Twitch or Kick video link.");
-  busy($("#go"), true, "Starting");
-  try {
-    await api("/api/clip", { method: "POST", body: { sourceUrl } });
-    $("#url").value = "";
-    msg(m, "Got it. Klipit is working on it. You can leave this page and come back.", true);
-    await loadMe();
-  } catch (err) {
-    msg(m, err.message);
-  } finally { busy($("#go"), false); if (!me?.plan) $("#go").disabled = true; }
-});
+// ---------- nav highlight ----------
+const links = $$(".nav-links a, .dock a");
+if ("IntersectionObserver" in window) {
+  const io = new IntersectionObserver((es) => es.forEach((e) => {
+    if (!e.isIntersecting) return;
+    links.forEach((a) => a.classList.toggle("on", a.getAttribute("href") === "#" + e.target.id && !a.classList.contains("go")));
+  }), { rootMargin: "-45% 0px -50% 0px" });
+  ["top", "how", "library", "pricing", "faq"].forEach((id) => { const s = document.getElementById(id); if (s) io.observe(s); });
+}
 
 // ---------- return from Stripe ----------
 (async function boot() {
   const q = new URLSearchParams(location.search);
   if (q.get("checkout") === "success" && q.get("session_id")) {
-    history.replaceState(null, "", location.pathname + "#clip");
+    history.replaceState(null, "", location.pathname + "#library");
     try {
       const r = await api("/api/auth/checkout", { method: "POST", body: { sessionId: q.get("session_id") } });
-      token = r.token; store.set(token);
+      token = r.token; lsSet(KEY, token);
       toast("You're in. Paste a stream to start.");
-    } catch (err) { msg($("#si-msg"), err.message); }
-    $("#clip").scrollIntoView();
+    } catch (err) { openAuth(err.message); }
   } else if (q.get("checkout") === "cancel") {
     history.replaceState(null, "", location.pathname + "#pricing");
     toast("Checkout canceled. Nothing was charged.");
   }
   await loadMe();
+  resumePending();
 })();

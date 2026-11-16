@@ -9,12 +9,12 @@ import { createCheckoutSession, handleWebhook, confirmCheckout, cardLast4, billi
 import { getSubscriberByEmail, isComp, createJob, updateJob, getJob, listJobs, failStuckJobs, uploadClip } from "./lib/supabase.js";
 import { clipStream, ClipError } from "./lib/clipper.js";
 import { issueToken, requireAuth, limited, safeEqual } from "./lib/auth.js";
+import { normalizeSource } from "../public/links.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3000;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const SOURCE_RE = /^https?:\/\/([a-z0-9-]+\.)*(youtube\.com|youtu\.be|twitch\.tv|kick\.com)\//i;
 
 app.set("trust proxy", 1);
 app.disable("x-powered-by");
@@ -132,8 +132,9 @@ app.post("/api/portal", requireAuth, async (req, res) => {
 
 app.post("/api/clip", requireAuth, async (req, res) => {
   try {
-    const sourceUrl = String(req.body?.sourceUrl || "").trim();
-    if (!SOURCE_RE.test(sourceUrl)) return res.status(400).json({ error: "Paste a YouTube, Twitch or Kick video link." });
+    const link = normalizeSource(req.body?.sourceUrl);
+    if (!link.ok) return res.status(400).json({ error: link.error });
+    const sourceUrl = link.url;
     const sub = await getSubscriberByEmail(req.email);
     if (!sub) return res.status(402).json({ error: "Your plan is not active. Pick a plan to keep clipping." });
     const tier = getTier(sub.tier);
@@ -142,7 +143,7 @@ app.post("/api/clip", requireAuth, async (req, res) => {
     const job = await createJob({ email: req.email, tier: sub.tier, sourceUrl });
     queue.push({ id: job.id, email: req.email, sourceUrl, tier });
     pump();
-    res.json({ jobId: job.id, position: queuePos(job.id) });
+    res.json({ jobId: job.id, platform: link.platform, position: queuePos(job.id) });
   } catch (e) {
     console.error("[clip]", e.message);
     res.status(500).json({ error: "Could not start that job. Try again." });
