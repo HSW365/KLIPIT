@@ -188,6 +188,7 @@ $("#signin").addEventListener("submit", async (e) => {
 
 function signOut(expired) {
   token = null; me = null; lsDel(KEY); clearTimeout(pollTimer);
+  if (!expired) lsDel("hsw_owner");
   render();
   if (expired) openAuth("Your session ended. Sign in again.");
 }
@@ -299,6 +300,22 @@ if ("IntersectionObserver" in window) {
   }), { rootMargin: "-45% 0px -50% 0px" });
   ["top", "how", "library", "pricing", "faq"].forEach((id) => { const s = document.getElementById(id); if (s) io.observe(s); });
 }
+
+// ---------- owner PIN login (tab from owner-login.js) ----------
+let ownerBusy = false;
+async function ownerSignIn() {
+  const ot = lsGet("hsw_owner");
+  if (!ot || ownerBusy || (token && me?.plan?.owner)) return;
+  ownerBusy = true;
+  try {
+    const r = await api("/api/auth/owner", { method: "POST", body: { token: ot } });
+    token = r.token; lsSet(KEY, token);
+    await loadMe(); toast("Owner signed in");
+    resumePending();
+  } catch (err) { toast(err.message); }
+  finally { ownerBusy = false; }
+}
+window.addEventListener("hsw-owner", (e) => { if (e.detail?.owner) ownerSignIn(); });
 
 // ---------- return from Stripe ----------
 (async function boot() {
