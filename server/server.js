@@ -100,6 +100,24 @@ app.post("/api/auth/signin", async (req, res) => {
   }
 });
 
+// Owner PIN login: the PIN service (Supabase edge function owner-pin) verifies its own signed token.
+const OWNER_PIN_API = `${(process.env.SUPABASE_URL || "https://lsxdlmrjrcivxwgfkpop.supabase.co").replace(/\/$/, "")}/functions/v1/owner-pin`;
+app.post("/api/auth/owner", async (req, res) => {
+  try {
+    if (limited(`own:${req.ip}`, 30)) return res.status(429).json({ error: "Too many tries. Wait 15 minutes." });
+    const t = String(req.body?.token || "");
+    if (!t.includes(".")) return res.status(401).json({ error: "Owner session ended. Enter your PIN again." });
+    const r = await fetch(OWNER_PIN_API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ a: "verify", token: t }) });
+    const j = await r.json().catch(() => ({}));
+    if (!j.ok) return res.status(401).json({ error: "Owner session ended. Enter your PIN again." });
+    const email = "hsw365media@gmail.com";
+    res.json({ token: issueToken(email), email });
+  } catch (e) {
+    console.error("[owner]", e.message);
+    res.status(500).json({ error: "Owner login is unavailable right now. Try again." });
+  }
+});
+
 app.get("/api/me", requireAuth, async (req, res) => {
   try {
     const sub = await getSubscriberByEmail(req.email);
