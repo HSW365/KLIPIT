@@ -47,7 +47,7 @@ h3{font-size:clamp(26px,2.4vw,34px)}
 .nav{position:sticky;top:0;z-index:50;background:rgba(8,3,26,.72);backdrop-filter:blur(14px) saturate(1.4);border-bottom:1px solid var(--line)}
 .nav .wrap{display:flex;align-items:center;justify-content:space-between;gap:20px;height:68px}
 .logo{display:flex;align-items:center;gap:12px}
-.logo-mark{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;background:var(--sun);color:#1a0626;font:900 28px/1 var(--disp);box-shadow:0 0 22px rgba(255,60,140,.55)}
+.logo-mark{width:40px;height:40px;border-radius:11px;display:block;box-shadow:0 0 22px rgba(155,92,255,.55)}
 .logo b{display:block;font:900 26px/1 var(--disp);letter-spacing:.06em;text-transform:uppercase}
 .logo small{display:block;font:700 10.5px/1.2 var(--mono);color:var(--mut);letter-spacing:.14em;text-transform:uppercase}
 .nav-links{display:flex;gap:6px}
