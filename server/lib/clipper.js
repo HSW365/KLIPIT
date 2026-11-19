@@ -147,8 +147,8 @@ async function probe(url) {
   } catch (e) {
     const msg = String(e.stderr || e.message).split("\n").filter((l) => /ERROR/.test(l)).pop() || firstLine(e.stderr || e.message);
     console.error("[probe]", url, msg);
-    if (/sign in|bot/i.test(msg)) throw new ClipError("YouTube blocked the request for this video. Try the Twitch or Kick VOD of the same stream.");
-    if (/unsupported url/i.test(msg)) throw new ClipError("That link is not a YouTube, Twitch or Kick video.");
+    if (/sign in|bot/i.test(msg)) throw new ClipError("YouTube blocked the request for this video. Paste the Twitch VOD of the same stream instead.");
+    if (/unsupported url/i.test(msg)) throw new ClipError("That link is not a YouTube or Twitch video.");
     throw new ClipError(`Could not open that link. ${msg.replace(/^ERROR:\s*/, "")}`);
   }
 }

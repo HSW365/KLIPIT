@@ -1,4 +1,4 @@
-// Shared link normalizer (browser + server). Accepts whatever a person copies from YouTube, Twitch or Kick:
+// Shared link normalizer (browser + server). Accepts whatever a person copies from YouTube or Twitch:
 // full links, links without https, mobile links, shorts, live, clips, channel links, or a whole pasted sentence.
 const reserved = new Set(["videos", "directory", "search", "settings", "downloads", "turbo", "subscriptions", "categories", "browse", "following", "u", "popout", "embed", "moderator", "dashboard"]);
 const bad = (error) => ({ ok: false, error });
@@ -36,15 +36,10 @@ export function normalizeSource(input) {
     return bad("That Twitch link is not a VOD or a channel. Copy the link of the past broadcast.");
   }
 
-  if (/^(?:www\.|clips\.)?kick\.com$/.test(host)) {
-    const uuid = (u.pathname.match(/\/videos?\/([0-9a-f-]{36})/i) || [])[1];
-    if (uuid) return { ok: true, platform: "kick", url: `https://kick.com/video/${uuid}` };
-    if (seg[0] && !reserved.has(seg[0].toLowerCase()) && /^[a-z0-9_-]{2,40}$/i.test(seg[0]) && seg[0].toLowerCase() !== "video" && (seg.length === 1 || seg[1] === "videos"))
-      return { ok: true, platform: "kick", url: `https://kick.com/${seg[0].toLowerCase()}` };
-    return bad("That Kick link is not a VOD or a channel. Copy the link of the past broadcast.");
-  }
+  if (/^(?:www\.|clips\.)?kick\.com$/.test(host))
+    return bad("Kick blocks Klipit's servers, so Kick links can't be clipped yet. Paste the Twitch or YouTube VOD of the same stream instead.");
 
-  return bad("Klipit reads YouTube, Twitch and Kick links. Paste one of those.");
+  return bad("Klipit reads YouTube and Twitch links. Paste one of those.");
 }
 
 export const platformOf = (v) => { const r = normalizeSource(v); return r.ok ? r.platform : null; };
