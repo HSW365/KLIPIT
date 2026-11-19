@@ -277,7 +277,7 @@ const fileName = (t, k) => `klipit-${String(k + 1).padStart(2, "0")}-${t.toLower
 $("#jobs").addEventListener("click", async (e) => {
   const y = e.target.closest("[data-yt]");
   if (y) {
-    if (!confirm("Post this clip to the HSW365MEDIA YouTube channel? It goes public with your clip, a link to Klipit, and credit to the streamer. You confirm you have the right to share it.")) return;
+    if (!confirm("Post this clip to the HSW365MEDIA YouTube channel? It goes public with your clip, a link to Klipit and hsw365.net, and credit to the streamer. You confirm you have the right to share it.")) return;
     const [jobId, index] = y.dataset.yt.split(":");
     y.disabled = true;
     try { await api("/api/yt/submit", { method: "POST", body: { jobId, index: Number(index), consent: true } }); y.textContent = "Queued for YouTube"; toast("Queued. It posts to the HSW365MEDIA channel soon."); }

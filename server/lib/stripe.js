@@ -73,7 +73,7 @@ export async function billingPortal(customerId) {
   if (!_portalConfig) {
     const list = await stripe.billingPortal.configurations.list({ is_default: true, limit: 1 });
     _portalConfig = list.data[0]?.id || (await stripe.billingPortal.configurations.create({
-      business_profile: { headline: "Klipit by HSW365 Media" },
+      business_profile: { headline: "Klipit by HSW365 Media · hsw365.net" },
       features: {
         invoice_history: { enabled: true },
         payment_method_update: { enabled: true },

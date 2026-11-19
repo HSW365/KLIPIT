@@ -59,7 +59,7 @@ app.post("/api/checkout", async (req, res) => {
     res.json({ url: session.url });
   } catch (e) {
     console.error("[checkout]", e.message);
-    res.status(500).json({ error: "Checkout is unavailable right now. Email hsw365media@gmail.com." });
+    res.status(500).json({ error: "Checkout is unavailable right now. Email hsw365media@gmail.com or visit hsw365.net." });
   }
 });
 
@@ -142,7 +142,7 @@ app.post("/api/portal", requireAuth, async (req, res) => {
     res.json({ url: await billingPortal(sub.stripe_customer_id) });
   } catch (e) {
     console.error("[portal]", e.message);
-    res.status(500).json({ error: "Billing page is unavailable right now. Email hsw365media@gmail.com." });
+    res.status(500).json({ error: "Billing page is unavailable right now. Email hsw365media@gmail.com or visit hsw365.net." });
   }
 });
 
