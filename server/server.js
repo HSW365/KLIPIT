@@ -247,6 +247,7 @@ async function pump() {
 
 const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "clip";
 
+app.use("/yt", (req, res, next) => { res.setHeader("Access-Control-Allow-Origin", "*"); next(); });
 app.use(express.static(path.join(__dirname, "..", "public"), { extensions: ["html"], maxAge: "1h" }));
 app.get("*", (_req, res) => res.sendFile(path.join(__dirname, "..", "public", "index.html")));
 
