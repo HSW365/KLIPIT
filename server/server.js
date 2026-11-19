@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import { TIERS, getTier } from "./lib/tiers.js";
 import { createCheckoutSession, handleWebhook, confirmCheckout, cardLast4, billingPortal } from "./lib/stripe.js";
-import { getSubscriberByEmail, isComp, createJob, updateJob, getJob, listJobs, failStuckJobs, uploadClip } from "./lib/supabase.js";
+import { getSubscriberByEmail, isComp, createJob, updateJob, getJob, listJobs, failStuckJobs, uploadClip, setClipYt, listYtQueue } from "./lib/supabase.js";
 import { clipStream, ClipError } from "./lib/clipper.js";
 import { issueToken, requireAuth, limited, safeEqual } from "./lib/auth.js";
 import { normalizeSource } from "../public/links.js";
@@ -176,6 +176,40 @@ app.get("/api/job/:id", requireAuth, async (req, res) => {
   } catch {
     res.status(404).json({ error: "Not found." });
   }
+});
+
+// ---- YouTube channel: users opt in per clip; the HSW365 PC uploads the queue ----
+
+app.post("/api/yt/submit", requireAuth, async (req, res) => {
+  try {
+    const { jobId, index, consent } = req.body || {};
+    if (consent !== true) return res.status(400).json({ error: "Please agree to post this clip." });
+    const job = await getJob(String(jobId || ""));
+    if (!job || job.email !== req.email) return res.status(404).json({ error: "Not found." });
+    const i = Number(index);
+    if (!Number.isInteger(i) || !job.clips?.[i]) return res.status(404).json({ error: "Clip not found." });
+    if (job.clips[i].yt) return res.json({ yt: job.clips[i].yt });
+    await setClipYt(job.id, i, { yt: "queued", yt_at: new Date().toISOString() });
+    res.json({ yt: "queued" });
+  } catch (e) {
+    console.error("[yt submit]", e.message);
+    res.status(500).json({ error: "Could not submit that clip. Try again." });
+  }
+});
+
+const ytKey = (req, res, next) =>
+  process.env.YT_QUEUE_KEY && safeEqual(String(req.headers["x-queue-key"] || ""), process.env.YT_QUEUE_KEY) ? next() : res.status(401).json({ error: "No." });
+
+app.get("/api/yt/queue", ytKey, async (_req, res) => {
+  try { res.json(await listYtQueue()); } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post("/api/yt/done", ytKey, async (req, res) => {
+  try {
+    const { jobId, index, videoUrl } = req.body || {};
+    const r = await setClipYt(String(jobId), Number(index), { yt: "posted", yt_url: String(videoUrl || "").slice(0, 200) });
+    res.json({ ok: Boolean(r) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // One job at a time keeps the box stable; everyone else waits in line and sees their place.

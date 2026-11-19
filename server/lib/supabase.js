@@ -118,3 +118,27 @@ export async function uploadClip(localPath, destName) {
   const { data } = supaClient().storage.from("klipit-clips").getPublicUrl(destName);
   return data.publicUrl;
 }
+
+// --- YouTube channel submissions (opt-in; clips[i].yt = "queued" | "posted") ---
+
+export async function setClipYt(jobId, index, patch) {
+  const job = await getJob(jobId);
+  if (!job || !Array.isArray(job.clips) || !job.clips[index]) return null;
+  const clips = job.clips.map((c, i) => (i === index ? { ...c, ...patch } : c));
+  await updateJob(jobId, { clips });
+  return { job, clip: clips[index] };
+}
+
+export async function listYtQueue() {
+  const { data, error } = await supaClient()
+    .from("klipit_jobs")
+    .select("id,email,source_title,source_url,clips")
+    .contains("clips", [{ yt: "queued" }])
+    .order("created_at", { ascending: true })
+    .limit(25);
+  if (error) throw error;
+  const out = [];
+  for (const j of data || [])
+    (j.clips || []).forEach((c, i) => { if (c.yt === "queued") out.push({ jobId: j.id, index: i, email: j.email, sourceTitle: j.source_title, sourceUrl: j.source_url, title: c.title, caption: c.caption, url: c.url }); });
+  return out;
+}

@@ -267,13 +267,23 @@ function gallery(j) {
         <video src="${esc(c.url)}#t=0.5" preload="metadata" controls playsinline></video>
         <div class="kc-b"><b>${esc(c.title)}</b><span>${clock(c.start)} to ${clock(c.end)}</span>
           <div class="kc-a"><a class="btn btn-sun" href="${esc(c.url)}" download="${esc(fileName(c.title, k))}">Download</a>
-          <button class="btn btn-ghost" type="button" data-copy="${esc(c.caption || c.title)}">Caption</button></div>
+          <button class="btn btn-ghost" type="button" data-copy="${esc(c.caption || c.title)}">Caption</button>
+          ${c.yt === "posted" && c.yt_url ? `<a class="btn btn-ghost" href="${esc(c.yt_url)}" target="_blank" rel="noopener">On YouTube</a>` : c.yt ? '<button class="btn btn-ghost" type="button" disabled>Queued for YouTube</button>' : `<button class="btn btn-ghost" type="button" data-yt="${esc(j.id)}:${k}">Post to YouTube</button>`}</div>
         </div>
       </div>`).join("")}</div>`;
 }
 const fileName = (t, k) => `klipit-${String(k + 1).padStart(2, "0")}-${t.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40)}.mp4`;
 
 $("#jobs").addEventListener("click", async (e) => {
+  const y = e.target.closest("[data-yt]");
+  if (y) {
+    if (!confirm("Post this clip to the HSW365MEDIA YouTube channel? It goes public with your clip, a link to Klipit, and credit to the streamer. You confirm you have the right to share it.")) return;
+    const [jobId, index] = y.dataset.yt.split(":");
+    y.disabled = true;
+    try { await api("/api/yt/submit", { method: "POST", body: { jobId, index: Number(index), consent: true } }); y.textContent = "Queued for YouTube"; toast("Queued. It posts to the HSW365MEDIA channel soon."); }
+    catch (err) { y.disabled = false; toast(err.message || "Could not submit"); }
+    return;
+  }
   const b = e.target.closest("[data-copy]");
   if (!b) return;
   try { await navigator.clipboard.writeText(b.dataset.copy); toast("Caption copied"); }
