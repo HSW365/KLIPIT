@@ -93,11 +93,19 @@ export async function listJobs(email, limit = 25) {
 }
 
 export async function failStuckJobs() {
-  const { error } = await supaClient()
-    .from("klipit_jobs")
-    .update({ status: "failed", error: "Server restarted while this was running. Paste the link again.", updated_at: new Date().toISOString() })
-    .in("status", ["queued", "processing"]);
+  const db = supaClient();
+  const { data, error } = await db.from("klipit_jobs").select("id, clips").in("status", ["queued", "processing"]);
   if (error) throw error;
+  const now = new Date().toISOString();
+  for (const j of data || []) {
+    const n = Array.isArray(j.clips) ? j.clips.length : 0;
+    // A restart should never hide clips that were already cut: keep them and mark the job done.
+    const patch = n > 0
+      ? { status: "done", progress: `Stopped early after ${n} clips`, error: null, updated_at: now }
+      : { status: "failed", error: "Server restarted while this was running. Paste the link again.", updated_at: now };
+    const { error: e2 } = await db.from("klipit_jobs").update(patch).eq("id", j.id);
+    if (e2) throw e2;
+  }
 }
 
 export async function getJob(id) {
