@@ -6,7 +6,7 @@ export const TIERS = {
   starter: {
     key: "starter",
     name: "Starter",
-    priceUsd: 20,         // monthly, USD — CONFIRMED
+    priceUsd: 10,         // monthly, USD — CONFIRMED
     clipsPerStream: 3,    // max clips generated per pasted stream
     maxMinutes: 30,       // max span of source stream scanned for highlights
     resolution: 720,      // vertical output height
@@ -17,7 +17,7 @@ export const TIERS = {
   pro: {
     key: "pro",
     name: "Pro",
-    priceUsd: 45,
+    priceUsd: 20,
     clipsPerStream: 15,
     maxMinutes: 120,
     resolution: 1080,
@@ -28,7 +28,7 @@ export const TIERS = {
   elite: {
     key: "elite",
     name: "Elite",
-    priceUsd: 99,
+    priceUsd: 40,
     clipsPerStream: 40,
     maxMinutes: 480,
     resolution: 1080,
