@@ -118,6 +118,21 @@ export async function getJob(id) {
 
 export async function uploadClip(localPath, destName) {
   const fs = await import("node:fs/promises");
+  // Supabase rejects objects over the project upload cap (50MB on the free plan). Shrink oversized clips first.
+  const LIMIT = 45 * 1024 * 1024;
+  if ((await fs.stat(localPath)).size > LIMIT) {
+    const { execFile } = await import("node:child_process");
+    const { promisify } = await import("node:util");
+    const run = promisify(execFile);
+    const { stdout } = await run("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", localPath]);
+    const dur = Math.max(1, Number(stdout) || 1);
+    const kbps = Math.max(300, Math.floor(((LIMIT * 8 * 0.9) / dur - 128000) / 1000));
+    const small = localPath.replace(/\.mp4$/, "") + ".small.mp4";
+    await run("ffmpeg", ["-y", "-loglevel", "error", "-i", localPath, "-c:v", "libx264", "-preset", "veryfast", "-b:v", kbps + "k",
+      "-maxrate", kbps + "k", "-bufsize", kbps * 2 + "k", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", small],
+      { timeout: 10 * 60e3, maxBuffer: 16 << 20 });
+    await fs.rename(small, localPath);
+  }
   const bytes = await fs.readFile(localPath);
   const { error } = await supaClient().storage
     .from("klipit-clips")
