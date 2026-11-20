@@ -24,3 +24,9 @@ services:
         sync: false
       - key: APP_URL
         sync: false
+      - key: YT_CLIENT_ID
+        sync: false
+      - key: YT_CLIENT_SECRET
+        sync: false
+      - key: YT_REFRESH_TOKEN
+        sync: false

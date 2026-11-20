@@ -7,7 +7,8 @@
   "engines": { "node": ">=20" },
   "scripts": {
     "start": "node server/server.js",
-    "stripe:setup": "node scripts/stripe-setup.js"
+    "stripe:setup": "node scripts/stripe-setup.js",
+    "yt:auth": "node scripts/youtube-auth.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.1",
