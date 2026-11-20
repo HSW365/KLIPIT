@@ -268,7 +268,7 @@ function gallery(j) {
         <div class="kc-b"><b>${esc(c.title)}</b><span>${clock(c.start)} to ${clock(c.end)}</span>
           <div class="kc-a"><a class="btn btn-sun" href="${esc(c.url)}" download="${esc(fileName(c.title, k))}">Download</a>
           <button class="btn btn-ghost" type="button" data-copy="${esc(c.caption || c.title)}">Caption</button>
-          ${c.yt === "posted" && c.yt_url ? `<a class="btn btn-ghost" href="${esc(c.yt_url)}" target="_blank" rel="noopener">On YouTube</a>` : c.yt ? '<button class="btn btn-ghost" type="button" disabled>Queued for YouTube</button>' : `<button class="btn btn-ghost" type="button" data-yt="${esc(j.id)}:${k}">Post to YouTube</button>`}</div>
+          ${c.yt === "posted" && c.yt_url ? `<a class="btn btn-ghost" href="${esc(c.yt_url)}" target="_blank" rel="noopener">On YouTube</a>` : c.yt && c.yt !== "failed" ? '<button class="btn btn-ghost" type="button" disabled>Posting to YouTube…</button>' : `<button class="btn btn-ghost" type="button" data-yt="${esc(j.id)}:${k}">Post to YouTube</button>`}</div>
         </div>
       </div>`).join("")}</div>`;
 }
@@ -280,7 +280,7 @@ $("#jobs").addEventListener("click", async (e) => {
     if (!confirm("Post this clip to the HSW365MEDIA YouTube channel? It goes public with your clip, a link to Klipit and hsw365.net, and credit to the streamer. You confirm you have the right to share it.")) return;
     const [jobId, index] = y.dataset.yt.split(":");
     y.disabled = true;
-    try { await api("/api/yt/submit", { method: "POST", body: { jobId, index: Number(index), consent: true } }); y.textContent = "Queued for YouTube"; toast("Queued. It posts to the HSW365MEDIA channel soon."); }
+    try { await api("/api/yt/submit", { method: "POST", body: { jobId, index: Number(index), consent: true } }); y.textContent = "Posting to YouTube…"; toast("Posting to the HSW365MEDIA channel. Check back in a few minutes."); }
     catch (err) { y.disabled = false; toast(err.message || "Could not submit"); }
     return;
   }

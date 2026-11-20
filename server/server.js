@@ -10,6 +10,7 @@ import { getSubscriberByEmail, isComp, createJob, updateJob, getJob, listJobs, f
 import { clipStream, ClipError } from "./lib/clipper.js";
 import { issueToken, requireAuth, limited, safeEqual } from "./lib/auth.js";
 import { normalizeSource } from "../public/links.js";
+import { ytConfigured, uploadToYouTube, buildMeta } from "./lib/youtube.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -188,8 +189,10 @@ app.post("/api/yt/submit", requireAuth, async (req, res) => {
     if (!job || job.email !== req.email) return res.status(404).json({ error: "Not found." });
     const i = Number(index);
     if (!Number.isInteger(i) || !job.clips?.[i]) return res.status(404).json({ error: "Clip not found." });
-    if (job.clips[i].yt) return res.json({ yt: job.clips[i].yt });
-    await setClipYt(job.id, i, { yt: "queued", yt_at: new Date().toISOString() });
+    if (!ytConfigured()) return res.status(503).json({ error: "YouTube posting is being connected. Download your clip for now." });
+    if (job.clips[i].yt && job.clips[i].yt !== "failed") return res.json({ yt: job.clips[i].yt });
+    await setClipYt(job.id, i, { yt: "queued", yt_at: new Date().toISOString(), yt_tries: 0 });
+    setImmediate(ytPump);
     res.json({ yt: "queued" });
   } catch (e) {
     console.error("[yt submit]", e.message);
@@ -211,6 +214,29 @@ app.post("/api/yt/done", ytKey, async (req, res) => {
     res.json({ ok: Boolean(r) });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+
+// Server-side uploader: drains the queue to the HSW365MEDIA channel (no PC needed).
+let ytBusy = false;
+async function ytPump() {
+  if (ytBusy || !ytConfigured()) return;
+  ytBusy = true;
+  try {
+    for (const q of await listYtQueue()) {
+      try {
+        const url = await uploadToYouTube({ url: q.url, ...buildMeta(q) });
+        await setClipYt(q.jobId, q.index, { yt: "posted", yt_url: url });
+        console.log("[yt] posted", q.jobId, q.index, url);
+      } catch (e) {
+        console.error("[yt]", q.jobId, q.index, e.message);
+        const job = await getJob(q.jobId).catch(() => null);
+        const tries = (job?.clips?.[q.index]?.yt_tries || 0) + 1;
+        await setClipYt(q.jobId, q.index, tries >= 3 ? { yt: "failed", yt_tries: tries, yt_error: e.message.slice(0, 200) } : { yt_tries: tries }).catch(() => {});
+      }
+    }
+  } catch (e) { console.error("[yt pump]", e.message); }
+  finally { ytBusy = false; }
+}
+setInterval(ytPump, 5 * 60 * 1000).unref();
 
 // One job at a time keeps the box stable; everyone else waits in line and sees their place.
 const queue = [];
@@ -254,4 +280,5 @@ app.get("*", (_req, res) => res.sendFile(path.join(__dirname, "..", "public", "i
 app.listen(PORT, async () => {
   console.log(`Klipit live on :${PORT}`);
   await failStuckJobs().catch((e) => console.error("[boot]", e.message));
+  setTimeout(ytPump, 5000);
 });
