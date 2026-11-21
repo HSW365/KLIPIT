@@ -98,27 +98,42 @@ const facebook = {
   },
 };
 
-// ---------- Instagram Reels (Graph API content publishing) ----------
+// ---------- Instagram Reels ----------
+// Uses the Instagram account already connected to iRun (irun_ig_connections, same Supabase project)
+// so there is nothing new to set up. Env IG_USER_ID + IG_TOKEN override it (Graph API on Facebook login).
+
+async function igConn() {
+  if (env("IG_USER_ID") && env("IG_TOKEN")) return { id: env("IG_USER_ID"), token: env("IG_TOKEN"), host: "graph.facebook.com" };
+  try {
+    const { supaClient } = await import("./supabase.js");
+    const { data } = await supaClient().from("irun_ig_connections").select("ig_user_id,username,token,expires_at").order("updated_at", { ascending: false }).limit(5);
+    const want = (env("IG_USERNAME") || "hoodstar365").toLowerCase();
+    const row = (data || []).find((r) => (r.username || "").toLowerCase() === want && r.token && (!r.expires_at || Date.parse(r.expires_at) > Date.now()));
+    return row ? { id: row.ig_user_id, token: row.token, host: "graph.instagram.com" } : null;
+  } catch { return null; }
+}
 
 const instagram = {
   id: "instagram",
-  configured: () => Boolean(env("IG_USER_ID") && (env("IG_TOKEN") || env("FB_PAGE_TOKEN"))),
+  // Connected when env creds exist or iRun's connection is reachable (Supabase env present); the real check happens at post time.
+  configured: () => Boolean((env("IG_USER_ID") && env("IG_TOKEN")) || (env("SUPABASE_URL") && env("SUPABASE_SERVICE_ROLE_KEY") && env("IG_FROM_IRUN") !== "off")),
   async post({ videoUrl, copy }) {
-    const token = env("IG_TOKEN") || env("FB_PAGE_TOKEN");
-    const base = `https://graph.facebook.com/v21.0/${env("IG_USER_ID")}`;
-    const c = await (await fetch(`${base}/media`, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ media_type: "REELS", video_url: videoUrl, caption: `${copy.title}\n\n${copy.description}`.slice(0, 2200), share_to_feed: "true", access_token: token }) })).json();
+    const c0 = await igConn();
+    if (!c0) throw new Error("Instagram: no valid iRun connection (reconnect @hoodstar365 in iRun)");
+    const base = `https://${c0.host}/v21.0/${c0.id}`;
+    const form = (o) => ({ method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ ...o, access_token: c0.token }) });
+    const c = await (await fetch(`${base}/media`, form({ media_type: "REELS", video_url: videoUrl, caption: `${copy.title}\n\n${copy.description}`.slice(0, 2200), share_to_feed: "true" }))).json();
     if (!c.id) throw new Error("Instagram container " + JSON.stringify(c.error || c).slice(0, 200));
     for (let i = 0; i < 40; i++) {
       await sleep(5000);
-      const s = await (await fetch(`https://graph.facebook.com/v21.0/${c.id}?fields=status_code&access_token=${token}`)).json();
+      const s = await (await fetch(`https://${c0.host}/v21.0/${c.id}?fields=status_code&access_token=${encodeURIComponent(c0.token)}`)).json();
       if (s.status_code === "FINISHED") break;
       if (s.status_code === "ERROR" || s.status_code === "EXPIRED") throw new Error("Instagram processing " + s.status_code);
     }
-    const p = await (await fetch(`${base}/media_publish`, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ creation_id: c.id, access_token: token }) })).json();
+    const p = await (await fetch(`${base}/media_publish`, form({ creation_id: c.id }))).json();
     if (!p.id) throw new Error("Instagram publish " + JSON.stringify(p.error || p).slice(0, 200));
-    const link = await (await fetch(`https://graph.facebook.com/v21.0/${p.id}?fields=permalink&access_token=${token}`)).json().catch(() => ({}));
-    return { ok: true, url: link.permalink || "https://instagram.com/" };
+    const link = await (await fetch(`https://${c0.host}/v21.0/${p.id}?fields=permalink&access_token=${encodeURIComponent(c0.token)}`)).json().catch(() => ({}));
+    return { ok: true, url: link.permalink || "https://instagram.com/hoodstar365" };
   },
 };
 
