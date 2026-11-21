@@ -24,3 +24,41 @@ services:
         sync: false
       - key: APP_URL
         sync: false
+      - key: AUTOPOST_PER_DAY
+        sync: false
+      - key: AUTOPOST_GAP_MIN
+        sync: false
+      - key: AUTOPOST_PLATFORMS
+        sync: false
+      - key: YT_QUEUE_KEY
+        sync: false
+      - key: YT_CLIENT_ID
+        sync: false
+      - key: YT_CLIENT_SECRET
+        sync: false
+      - key: YT_REFRESH_TOKEN
+        sync: false
+      - key: FB_PAGE_ID
+        sync: false
+      - key: FB_PAGE_TOKEN
+        sync: false
+      - key: IG_USER_ID
+        sync: false
+      - key: X_API_KEY
+        sync: false
+      - key: X_API_SECRET
+        sync: false
+      - key: X_ACCESS_TOKEN
+        sync: false
+      - key: X_ACCESS_SECRET
+        sync: false
+      - key: REDDIT_CLIENT_ID
+        sync: false
+      - key: REDDIT_CLIENT_SECRET
+        sync: false
+      - key: REDDIT_USERNAME
+        sync: false
+      - key: REDDIT_PASSWORD
+        sync: false
+      - key: REDDIT_SUBS
+        sync: false
