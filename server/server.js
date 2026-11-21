@@ -6,10 +6,12 @@ import { fileURLToPath } from "node:url";
 
 import { TIERS, getTier } from "./lib/tiers.js";
 import { createCheckoutSession, handleWebhook, confirmCheckout, cardLast4, billingPortal } from "./lib/stripe.js";
-import { getSubscriberByEmail, isComp, createJob, updateJob, getJob, listJobs, failStuckJobs, uploadClip, setClipYt, listYtQueue } from "./lib/supabase.js";
+import { getSubscriberByEmail, isComp, createJob, updateJob, getJob, listJobs, failStuckJobs, uploadClip, setClipYt, listYtQueue, queueJobForPublish, OWNER_EMAILS } from "./lib/supabase.js";
 import { clipStream, ClipError } from "./lib/clipper.js";
 import { issueToken, requireAuth, limited, safeEqual } from "./lib/auth.js";
 import { normalizeSource } from "../public/links.js";
+import { startAutopost, autopostState, tick as autopostTick } from "./lib/autopost.js";
+import { platformStatus } from "./lib/publish.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -43,6 +45,7 @@ app.get("/api/health", (_req, res) => {
     claude: Boolean(process.env.ANTHROPIC_API_KEY),
     supabase: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY),
     queue: queue.length,
+    autopost: { platforms: platformStatus(), ...autopostState() },
   });
 });
 
@@ -189,7 +192,7 @@ app.post("/api/yt/submit", requireAuth, async (req, res) => {
     const i = Number(index);
     if (!Number.isInteger(i) || !job.clips?.[i]) return res.status(404).json({ error: "Clip not found." });
     if (job.clips[i].yt) return res.json({ yt: job.clips[i].yt });
-    await setClipYt(job.id, i, { yt: "queued", yt_at: new Date().toISOString() });
+    await setClipYt(job.id, i, { yt: "queued", yt_at: new Date().toISOString(), pub: "queued", only: ["youtube"] });
     res.json({ yt: "queued" });
   } catch (e) {
     console.error("[yt submit]", e.message);
@@ -235,6 +238,11 @@ async function pump() {
       });
     await fs.rm(work, { recursive: true, force: true }).catch(() => {});
     await updateJob(id, { status: "done", progress: `${results.length} clips ready`, clips: results, source_title: title?.slice(0, 200) });
+    // HSW365 owner jobs post themselves to every connected platform (YouTube, FB, IG, X, Reddit).
+    if (OWNER_EMAILS.includes(String(running.email).toLowerCase())) {
+      const n = await queueJobForPublish(id).catch((e) => (console.error("[autopost queue]", e.message), 0));
+      console.log("[autopost] queued", n, "clips from", id);
+    }
   } catch (e) {
     console.error("[job]", id, e.message);
     const msg = e instanceof ClipError ? e.message : "Something went wrong while clipping. Paste the link again, and if it keeps failing email hsw365media@gmail.com.";
@@ -251,7 +259,10 @@ app.use("/yt", (req, res, next) => { res.setHeader("Access-Control-Allow-Origin"
 app.use(express.static(path.join(__dirname, "..", "public"), { extensions: ["html"], maxAge: "1h" }));
 app.get("*", (_req, res) => res.sendFile(path.join(__dirname, "..", "public", "index.html")));
 
+app.post("/api/autopost/run", ytKey, async (_req, res) => { await autopostTick(); res.json(autopostState()); });
+
 app.listen(PORT, async () => {
   console.log(`Klipit live on :${PORT}`);
+  startAutopost();
   await failStuckJobs().catch((e) => console.error("[boot]", e.message));
 });

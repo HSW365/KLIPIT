@@ -36,7 +36,7 @@ export async function upsertSubscriber({ email, stripeCustomerId, tier, status, 
   return data;
 }
 
-const OWNER_EMAILS = ["hsw365media@gmail.com", "hoodstarent365@gmail.com"];
+export const OWNER_EMAILS = ["hsw365media@gmail.com", "hoodstarent365@gmail.com"];
 
 export async function getSubscriberByEmail(email) {
   // HSW365 owner emails always get Elite, free, forever (isComp() treats "comp_" as owner, no billing).
@@ -165,3 +165,36 @@ export async function listYtQueue() {
     (j.clips || []).forEach((c, i) => { if (c.yt === "queued") out.push({ jobId: j.id, index: i, email: j.email, sourceTitle: j.source_title, sourceUrl: j.source_url, title: c.title, caption: c.caption, url: c.url }); });
   return out;
 }
+
+// --- auto-publisher queue (clips[i].pub = "queued" | "posted" | "failed") ---
+
+export async function listPubQueue() {
+  const { data, error } = await supaClient()
+    .from("klipit_jobs")
+    .select("id,email,source_title,source_url,status,created_at,clips")
+    .contains("clips", [{ pub: "queued" }])
+    .order("created_at", { ascending: true })
+    .limit(10);
+  if (error) throw error;
+  return data || [];
+}
+
+export async function listRecentJobsWithClips(sinceIso) {
+  const { data, error } = await supaClient()
+    .from("klipit_jobs")
+    .select("id,clips,updated_at")
+    .gte("updated_at", sinceIso)
+    .neq("clips", "[]");
+  if (error) throw error;
+  return data || [];
+}
+
+// Queue every clip of a finished owner job for auto-posting.
+export async function queueJobForPublish(jobId) {
+  const job = await getJob(jobId);
+  if (!job?.clips?.length) return 0;
+  const clips = job.clips.map((c) => (c.pub ? c : { ...c, pub: "queued" }));
+  await updateJob(jobId, { clips });
+  return clips.filter((c) => c.pub === "queued").length;
+}
+

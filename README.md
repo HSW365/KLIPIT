@@ -54,3 +54,14 @@ The `Dockerfile` installs ffmpeg + yt-dlp + fonts. Push to GitHub, create a Rend
 HSW365 · hsw365media@gmail.com
 
 Not affiliated with or endorsed by Rockstar Games / Take-Two. Users are responsible for the rights to any stream they submit.
+
+## Auto-publisher
+
+When an HSW365 owner job finishes, every clip is queued and posted (best first) to every platform whose
+credentials are set: YouTube (HSW365MEDIA), Facebook Page, Instagram Reels, X, Reddit. Pace: `AUTOPOST_PER_DAY`
+(default 3) with `AUTOPOST_GAP_MIN` minutes between posts. Subscriber "Post to YouTube" opt-ins go to YouTube only.
+`/api/health` shows which platforms are connected and what the last tick did. Set `AUTOPOST=off` to pause.
+
+- YouTube: default API quota allows about 6 uploads/day (1,600 units each of 10,000).
+- Snapchat: no public posting API exists for regular accounts, so it cannot be automated.
+- Reddit: posts the YouTube link to the subs in `REDDIT_SUBS`; keep that list to subs that allow clip links.
