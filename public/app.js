@@ -188,8 +188,10 @@ $("#signin").addEventListener("submit", async (e) => {
 
 function signOut(expired) {
   token = null; me = null; lsDel(KEY); clearTimeout(pollTimer);
-  if (!expired) lsDel("hsw_owner");
+  if (!expired) { lsDel("hsw_owner"); window.hswOwner?.signOut(); }
   render();
+  // Owner PIN session still good: sign straight back in instead of asking for email + card.
+  if (expired && lsGet("hsw_owner")) { ownerSignIn(); return; }
   if (expired) openAuth("Your session ended. Sign in again.");
 }
 $("#signout").addEventListener("click", () => { signOut(); toast("Signed out"); });
@@ -222,7 +224,7 @@ function render() {
   if (!signed) return;
   const p = me.plan;
   $("#me-email").textContent = me.email;
-  $("#plan-pill").textContent = p ? `${p.name}${p.owner ? " · Owner" : ""}` : "No active plan";
+  $("#plan-pill").textContent = p ? (p.owner ? "VIP · Owner · All access" : p.name) : "No active plan";
   $("#me-renew").textContent = p?.owner ? "Free full access" : p?.renews ? `Renews ${new Date(p.renews).toLocaleDateString()}` : "";
   $("#billing").hidden = !p || p.owner;
   $("#plan-note").textContent = p
@@ -322,10 +324,23 @@ async function ownerSignIn() {
     token = r.token; lsSet(KEY, token);
     await loadMe(); toast("Owner signed in");
     resumePending();
-  } catch (err) { toast(err.message); }
+  } catch (err) {
+    if (/owner session ended/i.test(err.message)) { lsDel("hsw_owner"); window.hswOwner?.signOut(); }
+    toast(err.message);
+  }
   finally { ownerBusy = false; }
 }
 window.addEventListener("hsw-owner", (e) => { if (e.detail?.owner) ownerSignIn(); });
+// PIN entry points inside the page (sign-in dialog, library gate).
+document.addEventListener("click", (e) => {
+  const a = e.target.closest?.("[data-owner-pin]");
+  if (!a) return;
+  e.preventDefault();
+  const d = a.closest("dialog"); if (d?.open) closeDialog(d);
+  window.hswOwner?.open();
+});
+// Saved owner session that was re-checked before this script ran.
+window.HSW_OWNER_READY?.then((ok) => { if (ok && !(token && me?.plan?.owner)) ownerSignIn(); });
 
 // ---------- return from Stripe ----------
 (async function boot() {

@@ -101,7 +101,7 @@
   <div class="sec-head"><p class="k">Your library</p><h2>Your clips. <span class="grad">One place.</span></h2></div>
   <div class="gate" id="gate">
     <div><h3>Sign in to see your clips</h3><p>Use the email on your plan and the last 4 digits of the card it bills. Just subscribed? You are signed in automatically after checkout.</p></div>
-    <div class="gate-btns"><button class="btn btn-sun" type="button" data-open="auth">Sign in</button><a class="btn btn-ghost" href="#pricing">See plans</a></div>
+    <div class="gate-btns"><button class="btn btn-sun" type="button" data-open="auth">Sign in</button><a class="btn btn-ghost" href="#pricing">See plans</a><a class="btn btn-ghost" href="#" data-owner-pin>Owner PIN</a></div>
   </div>
   <div id="app" hidden>
     <div class="lib-bar">
@@ -169,6 +169,7 @@
     <p class="form-msg" id="si-msg" role="alert"></p>
   </form>
   <p class="alt">No plan yet? <a href="#pricing" data-close>See plans</a></p>
+  <p class="alt">Owner? <a href="#" data-owner-pin>Sign in with your PIN</a></p>
 </dialog>
 
 <dialog id="buy">
@@ -185,6 +186,6 @@
 </dialog>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script type="module" src="/app.js?v=5"></script>
-<script src="owner-login.js?v=2" defer></script>
+<script src="owner-login.js?v=3" defer></script>
 </body>
 </html>
