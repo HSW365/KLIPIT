@@ -36,10 +36,15 @@ export function normalizeSource(input) {
     return bad("That Twitch link is not a VOD or a channel. Copy the link of the past broadcast.");
   }
 
-  if (/^(?:www\.|clips\.)?kick\.com$/.test(host))
-    return bad("Kick blocks Klipit's servers, so Kick links can't be clipped yet. Paste the Twitch or YouTube VOD of the same stream instead.");
+  if (/^(?:www\.)?kick\.com$/.test(host)) {
+    const vid = u.pathname.match(/\/videos?\/([0-9a-f-]{36})/i)?.[1];
+    if (vid) return { ok: true, platform: "kick", url: `https://kick.com/video/${vid}` };
+    if (seg.length === 1 && /^[a-z0-9_-]{2,25}$/i.test(seg[0]) && !reserved.has(seg[0].toLowerCase()))
+      return { ok: true, platform: "kick", url: `https://kick.com/${seg[0].toLowerCase()}` };
+    return bad("That Kick link is not a VOD or a channel. Copy the link of the past broadcast.");
+  }
 
-  return bad("Klipit reads YouTube and Twitch links. Paste one of those.");
+  return bad("Klipit reads YouTube, Twitch and Kick links. Paste one of those.");
 }
 
 export const platformOf = (v) => { const r = normalizeSource(v); return r.ok ? r.platform : null; };

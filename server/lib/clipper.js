@@ -21,6 +21,32 @@ if (process.env.YT_COOKIES) {
   YTDLP.push("--cookies", COOKIES);
 }
 
+
+// YouTube blocks datacenter IPs per player client. Try each client in turn (remembering the one that worked)
+// so links convert without cookies; YT_COOKIES still helps when set.
+const YT_CLIENTS = [null, "android_vr", "tv", "mweb", "web_safari", "tv_embedded"];
+const isYoutube = (u) => /^https?:\/\/([a-z0-9-]+\.)*(youtube\.com|youtu\.be|youtube-nocookie\.com)\//i.test(String(u));
+const BLOCKED = /sign in|not a bot|confirm you|po token|requested format|not available on this app|http error 403|unable to extract|player response/i;
+let goodClient = null;
+async function ytdlp(args, opts, url) {
+  if (!isYoutube(url)) return run("yt-dlp", [...YTDLP, ...args], opts);
+  const order = goodClient ? [goodClient, ...YT_CLIENTS.filter((c) => c !== goodClient)] : YT_CLIENTS;
+  let last;
+  for (const c of order) {
+    const extra = c ? ["--extractor-args", `youtube:player_client=${c}`] : [];
+    try {
+      const r = await run("yt-dlp", [...YTDLP, ...extra, ...args], opts);
+      goodClient = c;
+      return r;
+    } catch (e) {
+      last = e;
+      if (!BLOCKED.test(String(e.stderr || e.message))) throw e;
+      console.error(`[yt] client ${c || "default"} blocked, trying next`);
+    }
+  }
+  throw last;
+}
+
 export class ClipError extends Error {}
 
 // tier: { clipsPerStream, maxMinutes, resolution, watermark, captions }
@@ -141,13 +167,13 @@ async function resolveChannel(url, onProgress) {
 
 async function probe(url) {
   try {
-    const { stdout } = await run("yt-dlp", [...YTDLP, "--skip-download", "--print", "%(title)s\t%(duration)s\t%(is_live)s", url], { maxBuffer: 1 << 20, timeout: 90e3 });
+    const { stdout } = await ytdlp(["--skip-download", "--print", "%(title)s\t%(duration)s\t%(is_live)s", url], { maxBuffer: 1 << 20, timeout: 90e3 }, url);
     const [title, dur, live] = stdout.trim().split("\n").pop().split("\t");
     return { title: title || "Stream", duration: Number(dur) || 0, isLive: live === "True" };
   } catch (e) {
     const msg = String(e.stderr || e.message).split("\n").filter((l) => /ERROR/.test(l)).pop() || firstLine(e.stderr || e.message);
     console.error("[probe]", url, msg);
-    if (/sign in|bot/i.test(msg)) throw new ClipError("YouTube blocked the request for this video. Paste the Twitch VOD of the same stream instead.");
+    if (/sign in|bot/i.test(msg)) throw new ClipError("YouTube is blocking this server right now. Try again in a minute, or paste the Twitch or Kick VOD of the same stream.");
     if (/unsupported url/i.test(msg)) throw new ClipError("That link is not a YouTube or Twitch video.");
     throw new ClipError(`Could not open that link. ${msg.replace(/^ERROR:\s*/, "")}`);
   }
@@ -155,8 +181,8 @@ async function probe(url) {
 
 async function fetchTranscript(url, work) {
   try {
-    await run("yt-dlp", [...YTDLP, "--skip-download", "--write-auto-subs", "--write-subs", "--sub-langs", "en.*,en", "--sub-format", "vtt",
-      "-o", path.join(work, "src.%(ext)s"), url], { timeout: 120e3 });
+    await ytdlp(["--skip-download", "--write-auto-subs", "--write-subs", "--sub-langs", "en.*,en", "--sub-format", "vtt",
+      "-o", path.join(work, "src.%(ext)s"), url], { timeout: 120e3 }, url);
   } catch {
     return [];
   }
@@ -168,7 +194,7 @@ async function fetchTranscript(url, work) {
 // windows locally, then let Claude pick and title the best ones.
 async function audioHighlights(url, windowSec, count, work, onProgress) {
   onProgress("Listening to the stream");
-  const { stdout: audioUrl } = await run("yt-dlp", [...YTDLP, "-f", "bestaudio/worst", "-g", url], { timeout: 90e3 });
+  const { stdout: audioUrl } = await ytdlp(["-f", "bestaudio/worst", "-g", url], { timeout: 90e3 }, url);
   const src = audioUrl.trim().split("\n")[0];
   const local = path.join(work, "audio.ogg");
   const rms = await loudnessPerSecond(src, windowSec, local, (s) => onProgress(`Listening to the stream (${Math.min(99, Math.round((s / windowSec) * 100))}%)`));
@@ -259,7 +285,7 @@ function parseVtt(raw) {
 
 // Direct stream URLs (video, plus audio when separate), resolved once per job.
 async function mediaUrls(url, res) {
-  const { stdout } = await run("yt-dlp", [...YTDLP, "-f", `bv*[height<=${res}]+ba/b[height<=${res}]/b`, "-g", url], { timeout: 120e3 });
+  const { stdout } = await ytdlp(["-f", `bv*[height<=${res}]+ba/b[height<=${res}]/b`, "-g", url], { timeout: 120e3 }, url);
   const urls = stdout.trim().split("\n").filter((l) => /^https?:/.test(l));
   if (!urls.length) throw new ClipError("Could not open the video for that link.");
   return { urls: urls.slice(0, 2), page: url, format: `bv*[height<=${res}]+ba/b[height<=${res}]/b` };
@@ -288,8 +314,8 @@ async function renderClip(media, pick, tier, work, i) {
   // B: download the section, then encode from disk
   const raw = path.join(work, `seg_${i}.mp4`);
   const pad = 3;
-  await run("yt-dlp", [...YTDLP, "-f", media.format, "--download-sections", `*${Math.max(0, pick.start - pad)}-${pick.end + pad}`,
-    "--merge-output-format", "mp4", "-o", raw, media.page], { timeout: 10 * 60e3 });
+  await ytdlp(["-f", media.format, "--download-sections", `*${Math.max(0, pick.start - pad)}-${pick.end + pad}`,
+    "--merge-output-format", "mp4", "-o", raw, media.page], { timeout: 10 * 60e3 }, media.page);
   const seg = existsSync(raw) ? raw : path.join(work, (await fs.readdir(work)).find((f) => f.startsWith(`seg_${i}.`)) || "missing");
   const lead = pick.start - Math.max(0, pick.start - pad);
   await encode(["-ss", String(lead), "-t", String(dur), "-i", seg], "0:a?", pick, tier, out);
